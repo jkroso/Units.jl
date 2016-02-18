@@ -31,11 +31,20 @@ typealias Volume Size{3}
 immutable Meter{d,magnitude} <: Size{d}
   value::Real
 end
-typealias km Meter{1, 3}
-typealias m  Meter{1, 0}
-typealias cm Meter{1,-2}
-typealias mm Meter{1,-3}
+
+typealias km  Meter{1, 3}
+typealias m   Meter{1, 0}
+typealias cm  Meter{1,-2}
+typealias mm  Meter{1,-3}
+typealias km² Meter{2, 3}
+typealias m²  Meter{2, 0}
+typealias cm² Meter{2, -2}
+typealias mm² Meter{2, -3}
+typealias km³ Meter{3, 3}
+typealias m³  Meter{3, 0}
 typealias litre Meter{3,-1}
+typealias cm³ Meter{3, -2}
+typealias mm³ Meter{3, -3}
 
 # support the `2cm` syntax
 Base.(:*){m,d}(n::Real, ::Type{Meter{d,m}}) = Meter{d,m}(n)
@@ -45,7 +54,6 @@ Base.(:*){m,da,db}(::Type{Meter{da,m}}, ::Type{Meter{db,m}}) = Meter{(da + db),m
 # support `3m^2` syntax
 Base.(:*)(n::Real, m::Meter) = typeof(m)(m.value * n)
 Base.(:*)(m::Meter, n::Real) = n * m
-
 
 # Define math functions
 for sym in (:+, :-)
