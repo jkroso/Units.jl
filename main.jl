@@ -39,6 +39,13 @@ typealias litre Meter{3,-1}
 
 # support the `2cm` syntax
 Base.(:*){m,d}(n::Real, ::Type{Meter{d,m}}) = Meter{d,m}(n)
+# support `m^2` syntax
+Base.(:^){m,d}(::Type{Meter{d,m}}, n::Real) = Meter{n,m}(1)
+Base.(:*){m,da,db}(::Type{Meter{da,m}}, ::Type{Meter{db,m}}) = Meter{(da + db),m}(1)
+# support `3m^2` syntax
+Base.(:*)(n::Real, m::Meter) = typeof(m)(m.value * n)
+Base.(:*)(m::Meter, n::Real) = n * m
+
 
 # Define math functions
 for sym in (:+, :-)
