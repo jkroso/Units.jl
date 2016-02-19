@@ -47,7 +47,7 @@ typealias cm³ Meter{3, -2}
 typealias mm³ Meter{3, -3}
 
 # support the `2cm` syntax
-Base.(:*){m,d}(n::Real, ::Type{Meter{d,m}}) = Meter{d,m}(n)
+Base.(:*){T<:Unit}(n::Real, ::Type{T}) = T(n)
 # support `m^2` syntax
 Base.(:^){m,d}(::Type{Meter{d,m}}, n::Real) = Meter{n,m}(1)
 Base.(:*){m,da,db}(::Type{Meter{da,m}}, ::Type{Meter{db,m}}) = Meter{(da + db),m}(1)
