@@ -71,6 +71,11 @@ Base.(:*)(m::Meter, n::Real) = n * m
 Base.promote_rule{d,m1,m2}(::Type{Meter{d,m1}},::Type{Meter{d,m2}}) = Meter{d,min(m1,m2)}
 Base.convert{d,m1,m2}(::Type{Meter{d,m2}}, s::Meter{d,m1}) = Meter{d,m2}(magnify(s.value, m1 - m2))
 
+"""
+Scale `n` by `m` orders of magnitude. Always returns a `Float`
+"""
+magnify(n::Real, m::Integer) = n * 10.0 ^ m
+
 # Define math functions
 for sym in (:+, :-)
   @eval Base.$sym{T<:Meter}(a::T, b::T) = T($sym(a.value, b.value))
@@ -96,9 +101,3 @@ Base.show{d,mag}(io::IO, m::Meter{d,mag}) = begin
   print_shortest(io, m.value)
   print(io, get(prefix, mag, ""), 'm', d > 1 ? exponent[d] : "")
 end
-
-"""
-Scale `n` by `m` orders of magnitude. For the sake of type stability
-it always returns a `Float`
-"""
-magnify(n::Real, m::Integer) = n * 10.0 ^ m
