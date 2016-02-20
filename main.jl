@@ -49,8 +49,7 @@ const exponent = ['¹','²','³','⁴','⁵','⁶','⁷','⁸','⁹']
 abstract Unit <: Real
 
 show_value(io::IO, u::Unit) = begin
-  isinteger(u.value) && return print_shortest(io, convert(Int, u.value))
-  isa(u.value, Rational) && return print(io, u.value)
+  isa(u.value, Rational) && return print_shortest(io, convert(AbstractFloat, u.value))
   print_shortest(io, u.value)
 end
 Base.show(io::IO, t::Unit) = (show_value(io, t); show_unit(io, typeof(t)))
