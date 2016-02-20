@@ -55,11 +55,45 @@ show_value(io::IO, u::Unit) = begin
 end
 Base.show(io::IO, t::Unit) = (show_value(io, t); show_unit(io, typeof(t)))
 
+# basic math
+for sym in (:+, :-)
+  @eval Base.$sym{T<:Unit}(a::T, b::T) = T($sym(a.value, b.value))
+  @eval Base.$sym{A<:Unit,B<:Unit}(a::A, b::B) = begin
+    T = promote_type(A, B)
+    T($sym(convert(T, a).value, convert(T, b).value))
+  end
+end
+
 abstract Size{dimensions} <: Unit
 
 typealias Length Size{1}
 typealias Area Size{2}
 typealias Volume Size{3}
+
+const imperial_units = Dict(1609344//1000 => :mile,
+                            9144//10000 => :yard,
+                            3048//10000 => :ft,
+                            254//10000 => :inch)
+
+immutable ImperialSize{basefactor, d} <: Size{d}
+  value::Real
+end
+
+show_unit{d,f}(io::IO, ::Type{ImperialSize{f,d}}) =
+  print(io, imperial_units[f], d > 1 ? exponent[d] : "")
+
+basefactor{f,d}(s::Type{ImperialSize{f,d}}) = f
+
+Base.promote_rule{f1,f2,d}(::Type{ImperialSize{f1,d}},::Type{ImperialSize{f2,d}}) =
+  ImperialSize{min(f1,f2),d}
+Base.convert{f1,f2,d}(T::Type{ImperialSize{f2,d}}, s::ImperialSize{f1,d}) =
+  T(s.value * basefactor(typeof(s))//basefactor(T))
+
+for (factor, name) in imperial_units
+  @eval typealias $name ImperialSize{$factor, 1}
+  @eval typealias $(symbol(name, '²')) ImperialSize{$factor, 2}
+  @eval typealias $(symbol(name, '³')) ImperialSize{$factor, 3}
+end
 
 immutable Meter{d,magnitude} <: Size{d}
   value::Real
@@ -100,11 +134,10 @@ Scale `n` by `m` orders of magnitude
 """
 magnify(n::Real, m::Integer) = n * Rational(10) ^ m
 
-# Define math functions
-for sym in (:+, :-)
-  @eval Base.$sym{T<:Meter}(a::T, b::T) = T($sym(a.value, b.value))
-  @eval Base.$sym{d,m1,m2}(a::Meter{d,m1}, b::Meter{d,m2}) = $sym(promote(a, b)...)
-end
+# enable combining imperial and metric
+Base.promote_rule{f,m,d}(::Type{ImperialSize{f,d}}, ::Type{Meter{d,m}}) = Meter{1,0}
+Base.promote_rule{f,m,d}(::Type{Meter{d,m}}, ::Type{ImperialSize{f,d}}) = Meter{1,0}
+Base.convert{f,m,d}(T::Type{Meter{d,m}}, s::ImperialSize{f,d}) = T(s.value * f)
 
 promote_magnitude{amag,bmag,da,db}(a::Meter{da,amag}, b::Meter{db,bmag}) = begin
   avalue, bvalue, outmag = (bmag > amag
@@ -127,7 +160,9 @@ show_unit{d,mag}(io::IO, ::Type{Meter{d,mag}}) =
 const time_factors = Dict(-1000 => :ms,
                           1 => :s,
                           60 => :minute,
-                          3600 => :hr)
+                          3600 => :hr,
+                          86400 => :day,
+                          604800 => :week)
 
 immutable Time{factor} <: Unit
   value::Real
@@ -142,12 +177,8 @@ end
 
 # support Base.promote(1s, 2hr) == (1s, 3600s)
 Base.promote_rule{f1,f2}(::Type{Time{f1}},::Type{Time{f2}}) = Time{min(f1,f2)}
-Base.convert{f1,f2}(Out::Type{Time{f2}}, s::Time{f1}) = Out(s.value)
-
-for sym in (:+, :-)
-  @eval Base.$sym{T<:Time}(a::T, b::T) = T($sym(a.value, b.value))
-  @eval Base.$sym{fa,fb}(a::Time{fa}, b::Time{fb}) = $sym(promote(a,b)...)
-end
+Base.convert{f1,f2}(T::Type{Time{f2}}, s::Time{f1}) =
+  T(s.value * basefactor(typeof(s))//basefactor(T))
 
 immutable Ratio{Num,Den} <: Unit
   value::Real
@@ -165,12 +196,8 @@ typealias Speed{s<:Size,t<:Time} Ratio{s,t}
 Base.(:/){T<:Unit}(a::Unit, b::Type{T}) = Ratio{typeof(a),T}(a.value)
 Base.(:/){Num<:Unit,Den<:Unit}(a::Type{Num}, b::Type{Den}) = Ratio{Num,Den}
 
+# enable promote(1m/s, 2km/hr) == (1m/s, 7200m/s)
 Base.promote_rule{NA,DA,NB,DB}(a::Type{Ratio{NA,DA}}, b::Type{Ratio{NB,DB}}) =
   Ratio{promote_rule(NA,NB), promote_rule(DA,DB)}
 Base.convert{N1,D1,N2,D2}(T::Type{Ratio{N2,D2}}, r::Ratio{N1,D1}) =
   T(r.value * basefactor(N1)//basefactor(N2) * basefactor(D2)//basefactor(D1))
-
-for sym in (:+, :-)
-  @eval Base.$sym{T<:Ratio}(a::T, b::T) = T($sym(a.value, b.value))
-  @eval Base.$sym(a::Ratio, b::Ratio) = $sym(promote(a,b)...)
-end
