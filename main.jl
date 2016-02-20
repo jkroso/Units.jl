@@ -96,9 +96,9 @@ Base.promote_rule{d,m1,m2}(::Type{Meter{d,m1}},::Type{Meter{d,m2}}) = Meter{d,mi
 Base.convert{d,m1,m2}(::Type{Meter{d,m2}}, s::Meter{d,m1}) = Meter{d,m2}(magnify(s.value, m1 - m2))
 
 """
-Scale `n` by `m` orders of magnitude. Always returns a `Float`
+Scale `n` by `m` orders of magnitude
 """
-magnify(n::Real, m::Integer) = n * 10.0 ^ m
+magnify(n::Real, m::Integer) = n * Rational(10) ^ m
 
 # Define math functions
 for sym in (:+, :-)
