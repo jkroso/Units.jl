@@ -1,3 +1,13 @@
+"""
+Convert two `Unit`s to use the same magnitude while tolerating differences
+in the number of dimensions
+
+```julia
+promote_magnitude(1km², 2mm) == (1e6mm², 2mm)
+```
+"""
+function promote_magnitude end
+
 # map magnitudes to their standard name
 const prefix = Dict(1 => :da,
                     2 => :h,
@@ -32,6 +42,8 @@ immutable Meter{d,magnitude} <: Size{d}
   value::Real
 end
 
+Base.size{d}(::Meter{d}) = (d,)
+
 typealias km  Meter{1, 3}
 typealias m   Meter{1, 0}
 typealias cm  Meter{1,-2}
@@ -55,36 +67,38 @@ Base.(:*){m,da,db}(::Type{Meter{da,m}}, ::Type{Meter{db,m}}) = Meter{(da + db),m
 Base.(:*)(n::Real, m::Meter) = typeof(m)(m.value * n)
 Base.(:*)(m::Meter, n::Real) = n * m
 
+# support Base.promote(1mm, 2m) == (1mm, 2000mm)
+Base.promote_rule{d,m1,m2}(::Type{Meter{d,m1}},::Type{Meter{d,m2}}) = Meter{d,min(m1,m2)}
+Base.convert{d,m1,m2}(::Type{Meter{d,m2}}, s::Meter{d,m1}) = Meter{d,m2}(magnify(s.value, m1 - m2))
+
 # Define math functions
 for sym in (:+, :-)
-  @eval function Base.$sym{d}(a::Meter{d}, b::Meter{d})
-    mag, aval, bval = normalize(a, b)
-    Meter{d,mag}($sym(aval, bval))
-  end
+  @eval Base.$sym{T<:Meter}(a::T, b::T) = T($sym(a.value, b.value))
+  @eval Base.$sym{d,m1,m2}(a::Meter{d,m1}, b::Meter{d,m2}) = $sym(promote(a, b)...)
+end
+
+promote_magnitude{amag,bmag,da,db}(a::Meter{da,amag}, b::Meter{db,bmag}) = begin
+  avalue, bvalue, outmag = (bmag > amag
+  ? (a.value, b.value * (10 ^ (bmag - amag)), amag)
+  : (a.value * (10 ^ (amag - bmag)), b.value, bmag))
+  Meter{da,outmag}(avalue), Meter{db,outmag}(bvalue)
 end
 
 # * and / also effect the dimension count
 for sym in (:*, :/)
-  @eval function Base.$sym{da,db}(a::Meter{da},b::Meter{db})
-    mag, aval, bval = normalize(a, b)
-    dimensions = $(sym == :* ? :+ : :-)(da, db)
-    Meter{dimensions,mag}($sym(aval, bval))
+  @eval Base.$sym{d1,d2,m1,m2}(a::Meter{d1,m1}, b::Meter{d2,m2}) = $sym(promote_magnitude(a, b)...)
+  @eval Base.$sym{d1,d2,m}(a::Meter{d1,m}, b::Meter{d2,m}) = begin
+    Meter{$(sym == :* ? :+ : :-)(d1, d2),m}($sym(a.value, b.value))
   end
 end
 
-"""
-Determine a common magnitude and adjust both values to that magnitude
-"""
-normalize{amag,bmag,da,db}(a::Meter{da,amag}, b::Meter{db,bmag}) = begin
-  minmag = min(amag, bmag)
-  maxmag = max(amag, bmag)
-  difference = maxmag - minmag
-  if amag == minmag
-    minmag, a.value, b.value * (10 ^ difference)
-  else
-    minmag, a.value * (10 ^ difference), b.value
-  end
+Base.show{d,mag}(io::IO, m::Meter{d,mag}) = begin
+  print_shortest(io, m.value)
+  print(io, get(prefix, mag, ""), 'm', d > 1 ? exponent[d] : "")
 end
 
-Base.show{d,mag}(io::IO, m::Meter{d,mag}) =
-  print(io, m.value, get(prefix, mag, ""), 'm', d > 1 ? exponent[d] : "")
+"""
+Scale `n` by `m` orders of magnitude. For the sake of type stability
+it always returns a `Float`
+"""
+magnify(n::Real, m::Integer) = n * 10.0 ^ m
