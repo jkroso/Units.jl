@@ -110,7 +110,7 @@ Base.(:*)(m::Meter, n::Real) = n * m
 
 # support Base.promote(1mm, 2m) == (1mm, 2000mm)
 Base.promote_rule{d,m1,m2}(::Type{Meter{d,m1}},::Type{Meter{d,m2}}) = Meter{d,min(m1,m2)}
-Base.convert{d,m1,m2}(::Type{Meter{d,m2}}, s::Meter{d,m1}) = 
+Base.convert{d,m1,m2}(::Type{Meter{d,m2}}, s::Meter{d,m1}) =
   Meter{d,m2}(s.value * Rational(10) ^ (m1 - m2))
 
 # enable combining imperial and metric
@@ -179,7 +179,26 @@ basefactor(::Type{Degree}) = π/180
 basefactor(::Type{Radian}) = 1
 abbr(::Type{Degree}) = "°"
 abbr(::Type{Radian}) = "rad"
-Base.promote_rule(::Type{Degree}, ::Type{Radian}) = Radian
-Base.promote_rule(::Type{Radian}, ::Type{Degree}) = Radian
+Base.promote_rule{A<:Angle,B<:Angle}(::Type{A}, ::Type{B}) = Radian
 Base.convert(::Type{Radian}, d::Degree) = Radian(d.value * basefactor(Degree))
 Base.convert(::Type{Degree}, r::Radian) = Degree(r.value / basefactor(Degree))
+
+abstract Temperature{factor} <: Unit
+immutable Kelvin{f} <: Temperature value::Real end
+immutable Celsius{f} <: Temperature value::Real end
+immutable Fahrenheit{f} <: Temperature value::Real end
+typealias K Kelvin{0}
+typealias °C Celsius{0}
+typealias °F Fahrenheit{0}
+abbr{m}(::Type{Kelvin{m}}) = string(get(prefix, m, ""), "K")
+abbr{m}(::Type{Celsius{m}}) = string(get(prefix, m, ""), "°C")
+abbr{m}(::Type{Fahrenheit{m}}) = string(get(prefix, m, ""), "°F")
+basefactor{f}(::Type{Kelvin{f}}) = 1
+basefactor{f}(::Type{Celsius{f}}) = 1       # with a fixed offset
+basefactor{f}(::Type{Fahrenheit{f}}) = 5//9 #
+baseoffset{f}(::Type{Kelvin{f}}) = 0
+baseoffset{f}(::Type{Fahrenheit{f}}) = 459.67
+baseoffset{f}(::Type{Celsius{f}}) = 273.15
+Base.promote_rule{A<:Temperature,B<:Temperature}(::Type{A}, ::Type{B}) = Kelvin{0}
+Base.convert{K<:Kelvin,T<:Union{Celsius,Fahrenheit}}(::Type{K}, t::T) =
+  K((t.value + baseoffset(T)) * basefactor(T))
