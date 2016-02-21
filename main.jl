@@ -9,11 +9,6 @@ promote_magnitude(1km², 2mm) == (1e6mm², 2mm)
 function promote_magnitude end
 
 """
-Print the value without its unit
-"""
-function show_value end
-
-"""
 Print the shorthand notation for a given unit type
 """
 function show_unit end
