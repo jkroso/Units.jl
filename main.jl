@@ -114,8 +114,8 @@ Base.convert{d,m1,m2}(::Type{Meter{d,m2}}, s::Meter{d,m1}) =
   Meter{d,m2}(s.value * Rational(10) ^ (m1 - m2))
 
 # enable combining imperial and metric
-Base.promote_rule{f,m,d}(::Type{ImperialSize{f,d}}, ::Type{Meter{d,m}}) = Meter{1,0}
-Base.promote_rule{f,m,d}(::Type{Meter{d,m}}, ::Type{ImperialSize{f,d}}) = Meter{1,0}
+Base.promote_rule{f,m,d}(::Type{ImperialSize{f,d}}, ::Type{Meter{d,m}}) = Meter{d,0}
+Base.promote_rule{f,m,d}(::Type{Meter{d,m}}, ::Type{ImperialSize{f,d}}) = Meter{d,0}
 Base.convert{f,m,d}(T::Type{Meter{d,m}}, s::ImperialSize{f,d}) = T(s.value * f)
 
 promote_magnitude{amag,bmag,da,db}(a::Meter{da,amag}, b::Meter{db,bmag}) = begin
