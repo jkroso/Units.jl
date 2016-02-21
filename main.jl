@@ -193,12 +193,12 @@ typealias °F Fahrenheit{0}
 abbr{m}(::Type{Kelvin{m}}) = string(get(prefix, m, ""), "K")
 abbr{m}(::Type{Celsius{m}}) = string(get(prefix, m, ""), "°C")
 abbr{m}(::Type{Fahrenheit{m}}) = string(get(prefix, m, ""), "°F")
-basefactor{f}(::Type{Kelvin{f}}) = 1
-basefactor{f}(::Type{Celsius{f}}) = 1       # with a fixed offset
-basefactor{f}(::Type{Fahrenheit{f}}) = 5//9 #
-baseoffset{f}(::Type{Kelvin{f}}) = 0
-baseoffset{f}(::Type{Fahrenheit{f}}) = 459.67
-baseoffset{f}(::Type{Celsius{f}}) = 273.15
+basefactor{m}(::Type{Kelvin{m}}) = 1
+basefactor{m}(::Type{Celsius{m}}) = 1       # with a fixed offset
+basefactor{m}(::Type{Fahrenheit{m}}) = 5//9 #
+baseoffset{m}(::Type{Kelvin{m}}) = 0
+baseoffset{m}(::Type{Fahrenheit{m}}) = 459.67
+baseoffset{m}(::Type{Celsius{m}}) = 273.15
 Base.promote_rule{A<:Temperature,B<:Temperature}(::Type{A}, ::Type{B}) = Kelvin{0}
 Base.convert{K<:Kelvin,T<:Union{Celsius,Fahrenheit}}(::Type{K}, t::T) =
   K((t.value + baseoffset(T)) * basefactor(T))
