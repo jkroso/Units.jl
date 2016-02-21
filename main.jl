@@ -110,12 +110,8 @@ Base.(:*)(m::Meter, n::Real) = n * m
 
 # support Base.promote(1mm, 2m) == (1mm, 2000mm)
 Base.promote_rule{d,m1,m2}(::Type{Meter{d,m1}},::Type{Meter{d,m2}}) = Meter{d,min(m1,m2)}
-Base.convert{d,m1,m2}(::Type{Meter{d,m2}}, s::Meter{d,m1}) = Meter{d,m2}(magnify(s.value, m1 - m2))
-
-"""
-Scale `n` by `m` orders of magnitude
-"""
-magnify(n::Real, m::Integer) = n * Rational(10) ^ m
+Base.convert{d,m1,m2}(::Type{Meter{d,m2}}, s::Meter{d,m1}) = 
+  Meter{d,m2}(s.value * Rational(10) ^ (m1 - m2))
 
 # enable combining imperial and metric
 Base.promote_rule{f,m,d}(::Type{ImperialSize{f,d}}, ::Type{Meter{d,m}}) = Meter{1,0}
