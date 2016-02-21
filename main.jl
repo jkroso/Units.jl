@@ -173,3 +173,17 @@ Base.promote_rule{NA,DA,NB,DB}(a::Type{Ratio{NA,DA}}, b::Type{Ratio{NB,DB}}) =
   Ratio{promote_rule(NA,NB), promote_rule(DA,DB)}
 Base.convert{N1,D1,N2,D2}(T::Type{Ratio{N2,D2}}, r::Ratio{N1,D1}) =
   T(r.value * basefactor(N1)//basefactor(N2) * basefactor(D2)//basefactor(D1))
+
+abstract Angle <: Unit
+immutable Degree <: Angle value::Real end
+immutable Radian <: Angle value::Real end
+typealias ° Degree
+typealias rad Radian
+basefactor(::Type{Degree}) = π/180
+basefactor(::Type{Radian}) = 1
+abbr(::Type{Degree}) = "°"
+abbr(::Type{Radian}) = "rad"
+Base.promote_rule(::Type{Degree}, ::Type{Radian}) = Radian
+Base.promote_rule(::Type{Radian}, ::Type{Degree}) = Radian
+Base.convert(::Type{Radian}, d::Degree) = Radian(d.value * basefactor(Degree))
+Base.convert(::Type{Degree}, r::Radian) = Degree(r.value / basefactor(Degree))
