@@ -68,6 +68,7 @@ const imperial_units = Dict(1609344//1000 => :mile,
                             254//10000 => :inch)
 
 immutable ImperialSize{basefactor, d} <: Size{d} value::Real end
+
 for (factor, name) in imperial_units
   @eval typealias $name ImperialSize{$factor, 1}
   @eval typealias $(symbol(name, '²')) ImperialSize{$factor, 2}
@@ -97,6 +98,7 @@ typealias litre Meter{3,-1}
 typealias cm³ Meter{3, -2}
 typealias mm³ Meter{3, -3}
 
+abbr{d,m}(::Type{Meter{d,m}}) = string(get(prefix, m, ""), 'm', d > 1 ? exponent[d] : "")
 basefactor{d,m}(::Type{Meter{d,m}}) = Rational(10) ^ m
 
 # support the `2cm` syntax
@@ -133,8 +135,6 @@ for sym in (:*, :/)
   end
 end
 
-abbr{d,m}(::Type{Meter{d,m}}) = string(get(prefix, m, ""), 'm', d > 1 ? exponent[d] : "")
-
 const time_factors = Dict(-1000 => :ms,
                           1 => :s,
                           60 => :minute,
@@ -157,6 +157,8 @@ Base.convert{f1,f2}(T::Type{Time{f2}}, s::Time{f1}) =
 
 immutable Ratio{Num,Den} <: Unit value::Real end
 typealias Speed{s<:Size,t<:Time} Ratio{s,t}
+typealias Acceleration{s<:Size,t<:Time} Ratio{Speed{s,t},t}
+typealias Jerk{s<:Size,t<:Time} Ratio{Acceleration{s,t},t}
 
 abbr{Num,Den}(::Type{Ratio{Num,Den}}) = string(abbr(Num), '/', abbr(Den))
 
