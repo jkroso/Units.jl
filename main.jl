@@ -9,9 +9,9 @@ promote_magnitude(1km², 2mm) == (1e6mm², 2mm)
 function promote_magnitude end
 
 """
-Print the shorthand notation for a given unit type
+Returns the shorthand notation for a given unit type
 """
-function show_unit end
+function abbr end
 
 """
 `basefactor(km) == 1000`
@@ -43,11 +43,10 @@ const exponent = ['¹','²','³','⁴','⁵','⁶','⁷','⁸','⁹']
 
 abstract Unit <: Real
 
-show_value(io::IO, u::Unit) = begin
-  isa(u.value, Rational) && return print_shortest(io, convert(AbstractFloat, u.value))
-  print_shortest(io, u.value)
+Base.show(io::IO, t::Unit) = begin
+  print_shortest(io, convert(AbstractFloat, t.value))
+  write(io, abbr(typeof(t)))
 end
-Base.show(io::IO, t::Unit) = (show_value(io, t); show_unit(io, typeof(t)))
 
 # basic math
 for sym in (:+, :-)
@@ -59,7 +58,6 @@ for sym in (:+, :-)
 end
 
 abstract Size{dimensions} <: Unit
-
 typealias Length Size{1}
 typealias Area Size{2}
 typealias Volume Size{3}
@@ -69,13 +67,14 @@ const imperial_units = Dict(1609344//1000 => :mile,
                             3048//10000 => :ft,
                             254//10000 => :inch)
 
-immutable ImperialSize{basefactor, d} <: Size{d}
-  value::Real
+immutable ImperialSize{basefactor, d} <: Size{d} value::Real end
+for (factor, name) in imperial_units
+  @eval typealias $name ImperialSize{$factor, 1}
+  @eval typealias $(symbol(name, '²')) ImperialSize{$factor, 2}
+  @eval typealias $(symbol(name, '³')) ImperialSize{$factor, 3}
 end
 
-show_unit{d,f}(io::IO, ::Type{ImperialSize{f,d}}) =
-  print(io, imperial_units[f], d > 1 ? exponent[d] : "")
-
+abbr{d,f}(::Type{ImperialSize{f,d}}) = string(imperial_units[f], d > 1 ? exponent[d] : "")
 basefactor{f,d}(s::Type{ImperialSize{f,d}}) = f
 
 Base.promote_rule{f1,f2,d}(::Type{ImperialSize{f1,d}},::Type{ImperialSize{f2,d}}) =
@@ -83,19 +82,7 @@ Base.promote_rule{f1,f2,d}(::Type{ImperialSize{f1,d}},::Type{ImperialSize{f2,d}}
 Base.convert{f1,f2,d}(T::Type{ImperialSize{f2,d}}, s::ImperialSize{f1,d}) =
   T(s.value * basefactor(typeof(s))//basefactor(T))
 
-for (factor, name) in imperial_units
-  @eval typealias $name ImperialSize{$factor, 1}
-  @eval typealias $(symbol(name, '²')) ImperialSize{$factor, 2}
-  @eval typealias $(symbol(name, '³')) ImperialSize{$factor, 3}
-end
-
-immutable Meter{d,magnitude} <: Size{d}
-  value::Real
-end
-
-basefactor{d,m}(::Type{Meter{d,m}}) = Rational(10) ^ m
-Base.size{d}(::Meter{d}) = (d,)
-
+immutable Meter{d,magnitude} <: Size{d} value::Real end
 typealias km  Meter{1, 3}
 typealias m   Meter{1, 0}
 typealias cm  Meter{1,-2}
@@ -109,6 +96,8 @@ typealias m³  Meter{3, 0}
 typealias litre Meter{3,-1}
 typealias cm³ Meter{3, -2}
 typealias mm³ Meter{3, -3}
+
+basefactor{d,m}(::Type{Meter{d,m}}) = Rational(10) ^ m
 
 # support the `2cm` syntax
 Base.(:*){T<:Unit}(n::Real, ::Type{T}) = T(n)
@@ -148,8 +137,7 @@ for sym in (:*, :/)
   end
 end
 
-show_unit{d,mag}(io::IO, ::Type{Meter{d,mag}}) =
-  print(io, get(prefix, mag, ""), 'm', d > 1 ? exponent[d] : "")
+abbr{d,m}(::Type{Meter{d,m}}) = string(get(prefix, m, ""), 'm', d > 1 ? exponent[d] : "")
 
 const time_factors = Dict(-1000 => :ms,
                           1 => :s,
@@ -158,33 +146,23 @@ const time_factors = Dict(-1000 => :ms,
                           86400 => :day,
                           604800 => :week)
 
-immutable Time{factor} <: Unit
-  value::Real
-end
-
-show_unit{f}(io::IO, ::Type{Time{f}}) = print(io, time_factors[f])
-basefactor{f}(::Type{Time{f}}) = f
-
+immutable Time{factor} <: Unit value::Real end
 for (factor,name) in time_factors
   @eval typealias $name Time{$factor}
 end
+
+abbr{f}(::Type{Time{f}}) = string(time_factors[f])
+basefactor{f}(::Type{Time{f}}) = f
 
 # support Base.promote(1s, 2hr) == (1s, 3600s)
 Base.promote_rule{f1,f2}(::Type{Time{f1}},::Type{Time{f2}}) = Time{min(f1,f2)}
 Base.convert{f1,f2}(T::Type{Time{f2}}, s::Time{f1}) =
   T(s.value * basefactor(typeof(s))//basefactor(T))
 
-immutable Ratio{Num,Den} <: Unit
-  value::Real
-end
-
-show_unit{Num,Den}(io, ::Type{Ratio{Num,Den}}) = begin
-  show_unit(io, Num)
-  print(io, '/')
-  show_unit(io, Den)
-end
-
+immutable Ratio{Num,Den} <: Unit value::Real end
 typealias Speed{s<:Size,t<:Time} Ratio{s,t}
+
+abbr{Num,Den}(::Type{Ratio{Num,Den}}) = string(abbr(Num), '/', abbr(Den))
 
 # enable `1m/s` and `m/s` syntax
 Base.(:/){T<:Unit}(a::Unit, b::Type{T}) = Ratio{typeof(a),T}(a.value)
