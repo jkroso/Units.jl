@@ -101,14 +101,14 @@ typealias mm³ Meter{3, -3}
 abbr{d,m}(::Type{Meter{d,m}}) = string(get(prefix, m, ""), 'm', d > 1 ? exponent[d] : "")
 basefactor{d,m}(::Type{Meter{d,m}}) = Rational(10) ^ m
 
-# support the `2cm` syntax
+# support `2cm`
 Base.(:*){T<:Unit}(n::Real, ::Type{T}) = T(n)
-# support `m^2` syntax
-Base.(:^){m,d}(::Type{Meter{d,m}}, n::Real) = Meter{n,m}(1)
-Base.(:*){m,da,db}(::Type{Meter{da,m}}, ::Type{Meter{db,m}}) = Meter{(da + db),m}(1)
-# support `3m^2` syntax
-Base.(:*)(n::Real, m::Meter) = typeof(m)(m.value * n)
-Base.(:*)(m::Meter, n::Real) = n * m
+# support `m^2`
+Base.(:^){m,d}(::Type{Meter{d,m}}, n::Integer) = Meter{n,m}
+Base.(:*){m,da,db}(::Type{Meter{da,m}}, ::Type{Meter{db,m}}) = Meter{(da + db),m}
+# support `3 * 1cm`
+Base.(:*){T<:Unit}(n::Real, u::T) = T(u.value * n)
+Base.(:*){T<:Unit}(u::T, n::Real) = n * u
 
 # support Base.promote(1mm, 2m) == (1mm, 2000mm)
 Base.promote_rule{d,m1,m2}(::Type{Meter{d,m1}},::Type{Meter{d,m2}}) = Meter{d,min(m1,m2)}
