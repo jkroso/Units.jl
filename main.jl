@@ -106,9 +106,11 @@ Base.(:*){T<:Unit}(n::Real, ::Type{T}) = T(n)
 # support `m^2`
 Base.(:^){m,d}(::Type{Meter{d,m}}, n::Integer) = Meter{n,m}
 Base.(:*){m,da,db}(::Type{Meter{da,m}}, ::Type{Meter{db,m}}) = Meter{(da + db),m}
-# support `3 * 1cm`
-Base.(:*){T<:Unit}(n::Real, u::T) = T(u.value * n)
-Base.(:*){T<:Unit}(u::T, n::Real) = n * u
+# support `3 * 1cm` and `1cm / 3`
+for sym in (:*, :/)
+  @eval Base.$sym{T<:Unit}(n::Real, u::T) = T($sym(u.value, n))
+  @eval Base.$sym{T<:Unit}(u::T, n::Real) = $sym(n, u)
+end
 
 # support Base.promote(1mm, 2m) == (1mm, 2000mm)
 Base.promote_rule{d,m1,m2}(::Type{Meter{d,m1}},::Type{Meter{d,m2}}) = Meter{d,min(m1,m2)}
@@ -134,6 +136,8 @@ for sym in (:*, :/)
     Meter{$(sym == :* ? :+ : :-)(d1, d2),m}($sym(a.value, b.value))
   end
 end
+
+Base.(:^){d,m}(u::Meter{d,m}, n::Integer) = Meter{d * n, m}(u.value)
 
 const time_factors = Dict(-1000 => :ms,
                           1 => :s,
