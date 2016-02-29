@@ -135,7 +135,7 @@ for sym in (:*, :/)
   end
 end
 
-Base.(:^){d,m}(u::Meter{d,m}, n::Integer) = Meter{d * n, m}(u.value)
+Base.(:^){d,m}(u::Meter{d,m}, n::Integer) = Meter{d * n, m}(u.value ^ n)
 
 const time_factors = Dict(-1000 => :ms,
                           1 => :s,
