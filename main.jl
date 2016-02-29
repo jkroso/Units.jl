@@ -99,7 +99,7 @@ typealias cm³ Meter{3, -2}
 typealias mm³ Meter{3, -3}
 
 abbr{d,m}(::Type{Meter{d,m}}) = string(get(prefix, m, ""), 'm', d > 1 ? exponent[d] : "")
-basefactor{d,m}(::Type{Meter{d,m}}) = Rational(10) ^ m
+basefactor{d,m}(::Type{Meter{d,m}}) = (Rational(10) ^ m) ^ d
 
 # support `2cm`
 Base.(:*){T<:Unit}(n::Real, ::Type{T}) = T(n)
@@ -114,8 +114,8 @@ end
 
 # support Base.promote(1mm, 2m) == (1mm, 2000mm)
 Base.promote_rule{d,m1,m2}(::Type{Meter{d,m1}},::Type{Meter{d,m2}}) = Meter{d,min(m1,m2)}
-Base.convert{d,m1,m2}(::Type{Meter{d,m2}}, s::Meter{d,m1}) =
-  Meter{d,m2}(s.value * Rational(10) ^ (m1 - m2))
+Base.convert{d,m1,m2}(Out::Type{Meter{d,m2}}, s::Meter{d,m1}) =
+  Out(s.value * basefactor(typeof(s))//basefactor(Out))
 
 # enable combining imperial and metric
 Base.promote_rule{f,m,d}(::Type{ImperialSize{f,d}}, ::Type{Meter{d,m}}) = Meter{d,0}
@@ -123,10 +123,8 @@ Base.promote_rule{f,m,d}(::Type{Meter{d,m}}, ::Type{ImperialSize{f,d}}) = Meter{
 Base.convert{f,m,d}(T::Type{Meter{d,m}}, s::ImperialSize{f,d}) = T(s.value * f)
 
 promote_magnitude{amag,bmag,da,db}(a::Meter{da,amag}, b::Meter{db,bmag}) = begin
-  avalue, bvalue, outmag = (bmag > amag
-  ? (a.value, b.value * (10 ^ (bmag - amag)), amag)
-  : (a.value * (10 ^ (amag - bmag)), b.value, bmag))
-  Meter{da,outmag}(avalue), Meter{db,outmag}(bvalue)
+  minmag = min(amag, bmag)
+  convert(Meter{da,minmag}, a), convert(Meter{db,minmag}, b)
 end
 
 # * and / also effect the dimension count
