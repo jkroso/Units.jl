@@ -41,7 +41,7 @@ const prefix = Dict(1 => :da,
                   -24 => :y)
 const exponent = ['¹','²','³','⁴','⁵','⁶','⁷','⁸','⁹']
 
-abstract Unit <: Real
+abstract Unit <: Number
 
 Base.show(io::IO, t::Unit) = begin
   print_shortest(io, convert(AbstractFloat, t.value))
@@ -50,15 +50,40 @@ end
 
 # So that `Unit`s can be used in most places where a `Number` is expected. e.g `sin(20°)`
 Base.convert{T<:Number}(::Type{T}, u::Unit) = convert(T, u.value * basefactor(typeof(u)))
+Base.promote_rule{U<:Unit,N<:Number}(::Type{U}, ::Type{N}) = U
+Base.convert{U<:Unit,N<:Number}(::Type{U}, n::N) = U(n)
 
-# basic math
-for sym in (:+, :-)
+# support `2cm`
+Base.:*{T<:Unit}(n::Real, ::Type{T}) = T(n)
+
+# support `3 * 1cm` etc..
+for op in (:*, :/, :+, :-)
+  @eval Base.$op{T<:Unit}(n::Real, u::T) = T($op(u.value, n))
+  @eval Base.$op{T<:Unit}(u::T, n::Real) = T($op(n, u.value))
+end
+
+# support 1cm + 1mm etc..
+for sym in (:+, :-, :*, :-)
   @eval Base.$sym{T<:Unit}(a::T, b::T) = T($sym(a.value, b.value))
   @eval Base.$sym{A<:Unit,B<:Unit}(a::A, b::B) = begin
     T = promote_type(A, B)
     T($sym(convert(T, a).value, convert(T, b).value))
   end
 end
+
+immutable Ratio{Num,Den} <: Unit value::Real end
+
+abbr{Num,Den}(::Type{Ratio{Num,Den}}) = string(abbr(Num), '/', abbr(Den))
+
+# enable `1m/s` and `m/s` syntax
+Base.:/{T<:Unit}(a::Unit, b::Type{T}) = Ratio{typeof(a),T}(a.value)
+Base.:/{Num<:Unit,Den<:Unit}(a::Type{Num}, b::Type{Den}) = Ratio{Num,Den}
+
+# enable promote(1m/s, 2km/hr) == (1m/s, 7200m/s)
+Base.promote_rule{NA,DA,NB,DB}(a::Type{Ratio{NA,DA}}, b::Type{Ratio{NB,DB}}) =
+  Ratio{promote_rule(NA,NB), promote_rule(DA,DB)}
+Base.convert{N1,D1,N2,D2}(T::Type{Ratio{N2,D2}}, r::Ratio{N1,D1}) =
+  T(r.value * basefactor(N1)//basefactor(N2) * basefactor(D2)//basefactor(D1))
 
 abstract Size{dimensions} <: Unit
 typealias Length Size{1}
@@ -104,16 +129,9 @@ typealias mm³ Meter{3, -3}
 abbr{d,m}(::Type{Meter{d,m}}) = string(get(prefix, m, ""), 'm', d > 1 ? exponent[d] : "")
 basefactor{d,m}(::Type{Meter{d,m}}) = (Rational(10) ^ m) ^ d
 
-# support `2cm`
-Base.:*{T<:Unit}(n::Real, ::Type{T}) = T(n)
 # support `m^2`
 Base.:^{m,d}(::Type{Meter{d,m}}, n::Integer) = Meter{n,m}
 Base.:*{m,da,db}(::Type{Meter{da,m}}, ::Type{Meter{db,m}}) = Meter{(da + db),m}
-# support `3 * 1cm` and `1cm / 3`
-for sym in (:*, :/)
-  @eval Base.$sym{T<:Unit}(n::Real, u::T) = T($sym(u.value, n))
-  @eval Base.$sym{T<:Unit}(u::T, n::Real) = $sym(n, u)
-end
 
 # support Base.promote(1mm, 2m) == (1mm, 2000mm)
 Base.promote_rule{d,m1,m2}(::Type{Meter{d,m1}},::Type{Meter{d,m2}}) = Meter{d,min(m1,m2)}
@@ -160,22 +178,9 @@ Base.promote_rule{f1,f2}(::Type{Time{f1}},::Type{Time{f2}}) = Time{min(f1,f2)}
 Base.convert{f1,f2}(T::Type{Time{f2}}, s::Time{f1}) =
   T(s.value * basefactor(typeof(s))//basefactor(T))
 
-immutable Ratio{Num,Den} <: Unit value::Real end
 typealias Speed{s<:Size,t<:Time} Ratio{s,t}
 typealias Acceleration{s<:Size,t<:Time} Ratio{Speed{s,t},t}
 typealias Jerk{s<:Size,t<:Time} Ratio{Acceleration{s,t},t}
-
-abbr{Num,Den}(::Type{Ratio{Num,Den}}) = string(abbr(Num), '/', abbr(Den))
-
-# enable `1m/s` and `m/s` syntax
-Base.:/{T<:Unit}(a::Unit, b::Type{T}) = Ratio{typeof(a),T}(a.value)
-Base.:/{Num<:Unit,Den<:Unit}(a::Type{Num}, b::Type{Den}) = Ratio{Num,Den}
-
-# enable promote(1m/s, 2km/hr) == (1m/s, 7200m/s)
-Base.promote_rule{NA,DA,NB,DB}(a::Type{Ratio{NA,DA}}, b::Type{Ratio{NB,DB}}) =
-  Ratio{promote_rule(NA,NB), promote_rule(DA,DB)}
-Base.convert{N1,D1,N2,D2}(T::Type{Ratio{N2,D2}}, r::Ratio{N1,D1}) =
-  T(r.value * basefactor(N1)//basefactor(N2) * basefactor(D2)//basefactor(D1))
 
 abstract Angle <: Unit
 immutable Degree <: Angle value::Real end
