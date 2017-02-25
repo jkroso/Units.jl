@@ -48,10 +48,9 @@ Base.show(io::IO, t::Unit) = begin
   write(io, abbr(typeof(t)))
 end
 
-# So that `Unit`s can be used in most places where a `Number` is expected. e.g `sin(20°)`
-Base.convert{T<:Number}(::Type{T}, u::Unit) = convert(T, u.value * basefactor(typeof(u)))
-Base.promote_rule{U<:Unit,N<:Number}(::Type{U}, ::Type{N}) = U
-Base.convert{U<:Unit,N<:Number}(::Type{U}, n::N) = U(n)
+Base.convert{N<:Real,U<:Unit}(::Type{N}, u::U) = convert(N, u.value * basefactor(U))
+Base.convert{U<:Unit}(::Type{U}, n::Real) = U(n)
+Base.promote_rule{U<:Unit,N<:Real}(::Type{U}, ::Type{N}) = U
 
 # support `2cm`
 Base.:*{T<:Unit}(n::Real, ::Type{T}) = T(n)
@@ -112,19 +111,19 @@ Base.convert{f1,f2,d}(T::Type{ImperialSize{f2,d}}, s::ImperialSize{f1,d}) =
   T(s.value * basefactor(typeof(s))//basefactor(T))
 
 immutable Meter{d,magnitude} <: Size{d} value::Real end
-typealias km  Meter{1, 3}
-typealias m   Meter{1, 0}
-typealias cm  Meter{1,-2}
-typealias mm  Meter{1,-3}
-typealias km² Meter{2, 3}
-typealias m²  Meter{2, 0}
-typealias cm² Meter{2, -2}
-typealias mm² Meter{2, -3}
-typealias km³ Meter{3, 3}
-typealias m³  Meter{3, 0}
+typealias km    Meter{1, 3}
+typealias m     Meter{1, 0}
+typealias cm    Meter{1,-2}
+typealias mm    Meter{1,-3}
+typealias km²   Meter{2, 3}
+typealias m²    Meter{2, 0}
+typealias cm²   Meter{2, -2}
+typealias mm²   Meter{2, -3}
+typealias km³   Meter{3, 3}
+typealias m³    Meter{3, 0}
 typealias litre Meter{3,-1}
-typealias cm³ Meter{3, -2}
-typealias mm³ Meter{3, -3}
+typealias cm³   Meter{3, -2}
+typealias mm³   Meter{3, -3}
 
 abbr{d,m}(::Type{Meter{d,m}}) = string(get(prefix, m, ""), 'm', d > 1 ? exponent[d] : "")
 basefactor{d,m}(::Type{Meter{d,m}}) = (Rational(10) ^ m) ^ d
@@ -194,6 +193,10 @@ abbr(::Type{Radian}) = "rad"
 Base.promote_rule{A<:Angle,B<:Angle}(::Type{A}, ::Type{B}) = Radian
 Base.convert(::Type{Radian}, d::Degree) = Radian(d.value * basefactor(Degree))
 Base.convert(::Type{Degree}, r::Radian) = Degree(r.value / basefactor(Degree))
+
+for sym in (:sin,:cos,:tan)
+  @eval Base.$sym(n::Angle) = $sym(convert(Radian, n).value)
+end
 
 abstract Temperature{factor} <: Unit
 immutable Kelvin{f} <: Temperature value::Real end
