@@ -48,6 +48,9 @@ Base.show(io::IO, t::Unit) = begin
   write(io, abbr(typeof(t)))
 end
 
+# So that `Unit`s can be used in most places where a `Number` is expected. e.g `sin(20°)`
+Base.convert{T<:Number}(::Type{T}, u::Unit) = convert(T, u.value * basefactor(typeof(u)))
+
 # basic math
 for sym in (:+, :-)
   @eval Base.$sym{T<:Unit}(a::T, b::T) = T($sym(a.value, b.value))
