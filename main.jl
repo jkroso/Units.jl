@@ -71,8 +71,8 @@ immutable ImperialSize{basefactor, d} <: Size{d} value::Real end
 
 for (factor, name) in imperial_units
   @eval typealias $name ImperialSize{$factor, 1}
-  @eval typealias $(symbol(name, '²')) ImperialSize{$factor, 2}
-  @eval typealias $(symbol(name, '³')) ImperialSize{$factor, 3}
+  @eval typealias $(Symbol(name, '²')) ImperialSize{$factor, 2}
+  @eval typealias $(Symbol(name, '³')) ImperialSize{$factor, 3}
 end
 
 abbr{d,f}(::Type{ImperialSize{f,d}}) = string(imperial_units[f], d > 1 ? exponent[d] : "")
@@ -102,10 +102,10 @@ abbr{d,m}(::Type{Meter{d,m}}) = string(get(prefix, m, ""), 'm', d > 1 ? exponent
 basefactor{d,m}(::Type{Meter{d,m}}) = (Rational(10) ^ m) ^ d
 
 # support `2cm`
-Base.(:*){T<:Unit}(n::Real, ::Type{T}) = T(n)
+Base.:*{T<:Unit}(n::Real, ::Type{T}) = T(n)
 # support `m^2`
-Base.(:^){m,d}(::Type{Meter{d,m}}, n::Integer) = Meter{n,m}
-Base.(:*){m,da,db}(::Type{Meter{da,m}}, ::Type{Meter{db,m}}) = Meter{(da + db),m}
+Base.:^{m,d}(::Type{Meter{d,m}}, n::Integer) = Meter{n,m}
+Base.:*{m,da,db}(::Type{Meter{da,m}}, ::Type{Meter{db,m}}) = Meter{(da + db),m}
 # support `3 * 1cm` and `1cm / 3`
 for sym in (:*, :/)
   @eval Base.$sym{T<:Unit}(n::Real, u::T) = T($sym(u.value, n))
@@ -135,7 +135,7 @@ for sym in (:*, :/)
   end
 end
 
-Base.(:^){d,m}(u::Meter{d,m}, n::Integer) = Meter{d * n, m}(u.value ^ n)
+Base.:^{d,m}(u::Meter{d,m}, n::Integer) = Meter{d * n, m}(u.value ^ n)
 
 const time_factors = Dict(-1000 => :ms,
                           1 => :s,
@@ -165,8 +165,8 @@ typealias Jerk{s<:Size,t<:Time} Ratio{Acceleration{s,t},t}
 abbr{Num,Den}(::Type{Ratio{Num,Den}}) = string(abbr(Num), '/', abbr(Den))
 
 # enable `1m/s` and `m/s` syntax
-Base.(:/){T<:Unit}(a::Unit, b::Type{T}) = Ratio{typeof(a),T}(a.value)
-Base.(:/){Num<:Unit,Den<:Unit}(a::Type{Num}, b::Type{Den}) = Ratio{Num,Den}
+Base.:/{T<:Unit}(a::Unit, b::Type{T}) = Ratio{typeof(a),T}(a.value)
+Base.:/{Num<:Unit,Den<:Unit}(a::Type{Num}, b::Type{Den}) = Ratio{Num,Den}
 
 # enable promote(1m/s, 2km/hr) == (1m/s, 7200m/s)
 Base.promote_rule{NA,DA,NB,DB}(a::Type{Ratio{NA,DA}}, b::Type{Ratio{NB,DB}}) =
