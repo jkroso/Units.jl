@@ -48,6 +48,8 @@ Base.show(io::IO, t::Unit) = begin
   write(io, abbr(typeof(t)))
 end
 
+Base.:(==){U<:Unit}(a::U,b::U) = convert(Real, a) == convert(Real, b)
+
 Base.convert{N<:Real,U<:Unit}(::Type{N}, u::U) = convert(N, u.value * basefactor(U))
 Base.convert{U<:Unit}(::Type{U}, n::Real) = U(n)
 Base.promote_rule{U<:Unit,N<:Real}(::Type{U}, ::Type{N}) = U
@@ -58,11 +60,11 @@ Base.:*{T<:Unit}(n::Real, ::Type{T}) = T(n)
 # support `3 * 1cm` etc..
 for op in (:*, :/, :+, :-)
   @eval Base.$op{T<:Unit}(n::Real, u::T) = T($op(u.value, n))
-  @eval Base.$op{T<:Unit}(u::T, n::Real) = T($op(n, u.value))
+  @eval Base.$op{T<:Unit}(u::T, n::Real) = T($op(u.value, n))
 end
 
 # support 1cm + 1mm etc..
-for sym in (:+, :-, :*, :-)
+for sym in (:+, :-, :*, :/)
   @eval Base.$sym{T<:Unit}(a::T, b::T) = T($sym(a.value, b.value))
   @eval Base.$sym{A<:Unit,B<:Unit}(a::A, b::B) = begin
     T = promote_type(A, B)
