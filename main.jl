@@ -110,22 +110,22 @@ basefactor{f,d}(s::Type{ImperialSize{f,d}}) = f
 Base.promote_rule{f1,f2,d}(::Type{ImperialSize{f1,d}},::Type{ImperialSize{f2,d}}) =
   ImperialSize{min(f1,f2),d}
 Base.convert{f1,f2,d}(T::Type{ImperialSize{f2,d}}, s::ImperialSize{f1,d}) =
-  T(s.value * basefactor(typeof(s))//basefactor(T))
+  T(s.value * basefactor(typeof(s))/basefactor(T))
 
 immutable Meter{d,magnitude} <: Size{d} value::Real end
-typealias km    Meter{1, 3}
-typealias m     Meter{1, 0}
-typealias cm    Meter{1,-2}
-typealias mm    Meter{1,-3}
-typealias km²   Meter{2, 3}
-typealias m²    Meter{2, 0}
-typealias cm²   Meter{2, -2}
-typealias mm²   Meter{2, -3}
-typealias km³   Meter{3, 3}
-typealias m³    Meter{3, 0}
-typealias litre Meter{3,-1}
-typealias cm³   Meter{3, -2}
-typealias mm³   Meter{3, -3}
+typealias km    Meter{Rational(1), 3}
+typealias m     Meter{Rational(1), 0}
+typealias cm    Meter{Rational(1),-2}
+typealias mm    Meter{Rational(1),-3}
+typealias km²   Meter{Rational(2), 3}
+typealias m²    Meter{Rational(2), 0}
+typealias cm²   Meter{Rational(2), -2}
+typealias mm²   Meter{Rational(2), -3}
+typealias km³   Meter{Rational(3), 3}
+typealias m³    Meter{Rational(3), 0}
+typealias litre Meter{Rational(3),-1}
+typealias cm³   Meter{Rational(3), -2}
+typealias mm³   Meter{Rational(3), -3}
 
 abbr{d,m}(::Type{Meter{d,m}}) = string(get(prefix, m, ""), 'm', d > 1 ? exponent[d] : "")
 basefactor{d,m}(::Type{Meter{d,m}}) = (Rational(10) ^ m) ^ d
@@ -133,11 +133,12 @@ basefactor{d,m}(::Type{Meter{d,m}}) = (Rational(10) ^ m) ^ d
 # support `m^2`
 Base.:^{m,d}(::Type{Meter{d,m}}, n::Integer) = Meter{n,m}
 Base.:*{m,da,db}(::Type{Meter{da,m}}, ::Type{Meter{db,m}}) = Meter{(da + db),m}
+Base.sqrt{d,m}(s::Meter{d,m}) = Meter{d/2,m}(sqrt(s.value))
 
 # support Base.promote(1mm, 2m) == (1mm, 2000mm)
 Base.promote_rule{d,m1,m2}(::Type{Meter{d,m1}},::Type{Meter{d,m2}}) = Meter{d,min(m1,m2)}
-Base.convert{d,m1,m2}(Out::Type{Meter{d,m2}}, s::Meter{d,m1}) =
-  Out(s.value * basefactor(typeof(s))//basefactor(Out))
+Base.convert{d,m1,m2}(T::Type{Meter{d,m2}}, s::Meter{d,m1}) =
+  T(s.value * basefactor(typeof(s))/basefactor(T))
 
 # enable combining imperial and metric
 Base.promote_rule{f,m,d}(::Type{ImperialSize{f,d}}, ::Type{Meter{d,m}}) = Meter{d,0}
@@ -177,7 +178,7 @@ basefactor{f}(::Type{Time{f}}) = f
 # support Base.promote(1s, 2hr) == (1s, 3600s)
 Base.promote_rule{f1,f2}(::Type{Time{f1}},::Type{Time{f2}}) = Time{min(f1,f2)}
 Base.convert{f1,f2}(T::Type{Time{f2}}, s::Time{f1}) =
-  T(s.value * basefactor(typeof(s))//basefactor(T))
+  T(s.value * basefactor(typeof(s))/basefactor(T))
 
 typealias Speed{s<:Size,t<:Time} Ratio{s,t}
 typealias Acceleration{s<:Size,t<:Time} Ratio{Speed{s,t},t}
