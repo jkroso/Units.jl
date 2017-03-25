@@ -104,7 +104,7 @@ for (factor, name) in imperial_units
   @eval typealias $(Symbol(name, '³')) ImperialSize{$factor, 3}
 end
 
-abbr{d,f}(::Type{ImperialSize{f,d}}) = string(imperial_units[f], d > 1 ? exponent[d] : "")
+abbr{d,f}(::Type{ImperialSize{f,d}}) = string(imperial_units[f], d > 1 ? exponent[Int(d)] : "")
 basefactor{f,d}(s::Type{ImperialSize{f,d}}) = f
 
 Base.promote_rule{f1,f2,d}(::Type{ImperialSize{f1,d}},::Type{ImperialSize{f2,d}}) =
@@ -127,7 +127,7 @@ typealias litre Meter{Rational(3),-1}
 typealias cm³   Meter{Rational(3), -2}
 typealias mm³   Meter{Rational(3), -3}
 
-abbr{d,m}(::Type{Meter{d,m}}) = string(get(prefix, m, ""), 'm', d > 1 ? exponent[d] : "")
+abbr{d,m}(::Type{Meter{d,m}}) = string(get(prefix, m, ""), 'm', d > 1 ? exponent[Int(d)] : "")
 basefactor{d,m}(::Type{Meter{d,m}}) = (Rational(10) ^ m) ^ d
 
 # support `m^2`
