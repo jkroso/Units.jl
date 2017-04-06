@@ -15,8 +15,9 @@ function abbr end
 
 """
 `basefactor(km) == 1000`
+`basefactor(m) == 1`
 """
-function basefactor end
+function basefactor(x) 1 end
 
 # map magnitudes to their standard name
 const prefix = Dict(1 => :da,
@@ -190,7 +191,6 @@ immutable Radian <: Angle value::Real end
 typealias ° Degree
 typealias rad Radian
 basefactor(::Type{Degree}) = π/180
-basefactor(::Type{Radian}) = 1
 abbr(::Type{Degree}) = "°"
 abbr(::Type{Radian}) = "rad"
 Base.promote_rule{A<:Angle,B<:Angle}(::Type{A}, ::Type{B}) = Radian
@@ -211,8 +211,6 @@ typealias °F Fahrenheit{0}
 abbr{m}(::Type{Kelvin{m}}) = string(get(prefix, m, ""), "K")
 abbr{m}(::Type{Celsius{m}}) = string(get(prefix, m, ""), "°C")
 abbr{m}(::Type{Fahrenheit{m}}) = string(get(prefix, m, ""), "°F")
-basefactor{m}(::Type{Kelvin{m}}) = 1
-basefactor{m}(::Type{Celsius{m}}) = 1       # with a fixed offset
 basefactor{m}(::Type{Fahrenheit{m}}) = 5//9 #
 baseoffset{m}(::Type{Kelvin{m}}) = 0
 baseoffset{m}(::Type{Fahrenheit{m}}) = 459.67
@@ -220,3 +218,14 @@ baseoffset{m}(::Type{Celsius{m}}) = 273.15
 Base.promote_rule{A<:Temperature,B<:Temperature}(::Type{A}, ::Type{B}) = Kelvin{0}
 Base.convert{K<:Kelvin,T<:Union{Celsius,Fahrenheit}}(::Type{K}, t::T) =
   K((t.value + baseoffset(T)) * basefactor(T))
+
+abstract Weight{magnitude} <: Unit
+immutable Gram{m} <: Weight{m} value::Real end
+typealias g Gram{0}
+typealias kg Gram{3}
+typealias ton Gram{6}
+abbr{m}(::Type{Gram{m}}) = string(get(prefix, m, ""), "g")
+abbr(::Type{Gram{6}}) = "ton"
+basefactor{m}(::Type{Gram{m}}) = 10^m
+Base.promote_rule{a,b}(::Type{Gram{a}}, ::Type{Gram{b}}) = Gram{min(a,b)}
+Base.convert{A<:Gram}(::Type{A}, b::Gram) = A(b.value * (basefactor(typeof(b))/basefactor(A)))
