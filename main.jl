@@ -42,7 +42,7 @@ const prefix = Dict(1 => :da,
                   -24 => :y)
 const exponent = ['¹','²','³','⁴','⁵','⁶','⁷','⁸','⁹']
 
-abstract Unit <: Number
+abstract type Unit <: Number end
 
 Base.show(io::IO, t::Unit) = begin
   print_shortest(io, convert(AbstractFloat, t.value))
@@ -73,7 +73,7 @@ for sym in (:+, :-, :*, :/)
   end
 end
 
-immutable Ratio{Num,Den} <: Unit value::Real end
+struct Ratio{Num,Den} <: Unit value::Real end
 
 abbr{Num,Den}(::Type{Ratio{Num,Den}}) = string(abbr(Num), '/', abbr(Den))
 
@@ -87,22 +87,22 @@ Base.promote_rule{NA,DA,NB,DB}(a::Type{Ratio{NA,DA}}, b::Type{Ratio{NB,DB}}) =
 Base.convert{N1,D1,N2,D2}(T::Type{Ratio{N2,D2}}, r::Ratio{N1,D1}) =
   T(r.value * basefactor(N1)//basefactor(N2) * basefactor(D2)//basefactor(D1))
 
-abstract Size{dimensions} <: Unit
-typealias Length Size{1}
-typealias Area Size{2}
-typealias Volume Size{3}
+abstract type Size{dimensions} <: Unit end
+const Length = Size{1}
+const Area = Size{2}
+const Volume = Size{3}
 
 const imperial_units = Dict(1609344//1000 => :mile,
                             9144//10000 => :yard,
                             3048//10000 => :ft,
                             254//10000 => :inch)
 
-immutable ImperialSize{basefactor, d} <: Size{d} value::Real end
+struct ImperialSize{basefactor, d} <: Size{d} value::Real end
 
 for (factor, name) in imperial_units
-  @eval typealias $name ImperialSize{$factor, 1}
-  @eval typealias $(Symbol(name, '²')) ImperialSize{$factor, 2}
-  @eval typealias $(Symbol(name, '³')) ImperialSize{$factor, 3}
+  @eval const $name = ImperialSize{$factor, 1}
+  @eval const $(Symbol(name, '²')) = ImperialSize{$factor, 2}
+  @eval const $(Symbol(name, '³')) = ImperialSize{$factor, 3}
 end
 
 abbr{d,f}(::Type{ImperialSize{f,d}}) = string(imperial_units[f], d > 1 ? exponent[Int(d)] : "")
@@ -113,20 +113,20 @@ Base.promote_rule{f1,f2,d}(::Type{ImperialSize{f1,d}},::Type{ImperialSize{f2,d}}
 Base.convert{f1,f2,d}(T::Type{ImperialSize{f2,d}}, s::ImperialSize{f1,d}) =
   T(s.value * basefactor(typeof(s))/basefactor(T))
 
-immutable Meter{d,magnitude} <: Size{d} value::Real end
-typealias km    Meter{Rational(1), 3}
-typealias m     Meter{Rational(1), 0}
-typealias cm    Meter{Rational(1),-2}
-typealias mm    Meter{Rational(1),-3}
-typealias km²   Meter{Rational(2), 3}
-typealias m²    Meter{Rational(2), 0}
-typealias cm²   Meter{Rational(2), -2}
-typealias mm²   Meter{Rational(2), -3}
-typealias km³   Meter{Rational(3), 3}
-typealias m³    Meter{Rational(3), 0}
-typealias litre Meter{Rational(3),-1}
-typealias cm³   Meter{Rational(3), -2}
-typealias mm³   Meter{Rational(3), -3}
+struct Meter{d,magnitude} <: Size{d} value::Real end
+const km    = Meter{Rational(1), 3}
+const m     = Meter{Rational(1), 0}
+const cm    = Meter{Rational(1),-2}
+const mm    = Meter{Rational(1),-3}
+const km²   = Meter{Rational(2), 3}
+const m²    = Meter{Rational(2), 0}
+const cm²   = Meter{Rational(2), -2}
+const mm²   = Meter{Rational(2), -3}
+const km³   = Meter{Rational(3), 3}
+const m³    = Meter{Rational(3), 0}
+const litre = Meter{Rational(3),-1}
+const cm³   = Meter{Rational(3), -2}
+const mm³   = Meter{Rational(3), -3}
 
 abbr{d,m}(::Type{Meter{d,m}}) = string(get(prefix, m, ""), 'm', d > 1 ? exponent[Int(d)] : "")
 basefactor{d,m}(::Type{Meter{d,m}}) = (Rational(10) ^ m) ^ d
@@ -168,9 +168,9 @@ const time_factors = Dict(-1000 => :ms,
                           86400 => :day,
                           604800 => :week)
 
-immutable Time{factor} <: Unit value::Real end
+struct Time{factor} <: Unit value::Real end
 for (factor,name) in time_factors
-  @eval typealias $name Time{$factor}
+  @eval const $name = Time{$factor}
 end
 
 abbr{f}(::Type{Time{f}}) = string(time_factors[f])
@@ -181,15 +181,15 @@ Base.promote_rule{f1,f2}(::Type{Time{f1}},::Type{Time{f2}}) = Time{min(f1,f2)}
 Base.convert{f1,f2}(T::Type{Time{f2}}, s::Time{f1}) =
   T(s.value * basefactor(typeof(s))/basefactor(T))
 
-typealias Speed{s<:Size,t<:Time} Ratio{s,t}
-typealias Acceleration{s<:Size,t<:Time} Ratio{Speed{s,t},t}
-typealias Jerk{s<:Size,t<:Time} Ratio{Acceleration{s,t},t}
+const Speed{s<:Size,t<:Time} = Ratio{s,t}
+const Acceleration{s<:Size,t<:Time} = Ratio{Speed{s,t},t}
+const Jerk{s<:Size,t<:Time} = Ratio{Acceleration{s,t},t}
 
-abstract Angle <: Unit
-immutable Degree <: Angle value::Real end
-immutable Radian <: Angle value::Real end
-typealias ° Degree
-typealias rad Radian
+abstract type Angle <: Unit end
+struct Degree <: Angle value::Real end
+struct Radian <: Angle value::Real end
+const ° = Degree
+const rad = Radian
 basefactor(::Type{Degree}) = π/180
 abbr(::Type{Degree}) = "°"
 abbr(::Type{Radian}) = "rad"
@@ -201,13 +201,13 @@ for sym in (:sin,:cos,:tan)
   @eval Base.$sym(n::Angle) = $sym(convert(Radian, n).value)
 end
 
-abstract Temperature{factor} <: Unit
-immutable Kelvin{f} <: Temperature value::Real end
-immutable Celsius{f} <: Temperature value::Real end
-immutable Fahrenheit{f} <: Temperature value::Real end
-typealias K Kelvin{0}
-typealias °C Celsius{0}
-typealias °F Fahrenheit{0}
+abstract type Temperature{factor} <: Unit end
+struct Kelvin{f} <: Temperature{f} value::Real end
+struct Celsius{f} <: Temperature{f} value::Real end
+struct Fahrenheit{f} <: Temperature{f} value::Real end
+const K = Kelvin{0}
+const °C = Celsius{0}
+const °F = Fahrenheit{0}
 abbr{m}(::Type{Kelvin{m}}) = string(get(prefix, m, ""), "K")
 abbr{m}(::Type{Celsius{m}}) = string(get(prefix, m, ""), "°C")
 abbr{m}(::Type{Fahrenheit{m}}) = string(get(prefix, m, ""), "°F")
@@ -219,11 +219,11 @@ Base.promote_rule{A<:Temperature,B<:Temperature}(::Type{A}, ::Type{B}) = Kelvin{
 Base.convert{K<:Kelvin,T<:Union{Celsius,Fahrenheit}}(::Type{K}, t::T) =
   K((t.value + baseoffset(T)) * basefactor(T))
 
-abstract Weight{magnitude} <: Unit
-immutable Gram{m} <: Weight{m} value::Real end
-typealias g Gram{0}
-typealias kg Gram{3}
-typealias ton Gram{6}
+abstract type Weight{magnitude} <: Unit end
+struct Gram{m} <: Weight{m} value::Real end
+const g = Gram{0}
+const kg = Gram{3}
+const ton = Gram{6}
 abbr{m}(::Type{Gram{m}}) = string(get(prefix, m, ""), "g")
 abbr(::Type{Gram{6}}) = "ton"
 basefactor{m}(::Type{Gram{m}}) = 10^m
