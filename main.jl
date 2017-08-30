@@ -40,7 +40,7 @@ const prefix = Dict(1 => :da,
                   -18 => :a,
                   -21 => :z,
                   -24 => :y)
-const exponent = ['¹','²','³','⁴','⁵','⁶','⁷','⁸','⁹']
+const exponents = ['¹','²','³','⁴','⁵','⁶','⁷','⁸','⁹']
 
 abstract type Unit <: Number end
 
@@ -65,7 +65,7 @@ for op in (:*, :/, :+, :-)
 end
 
 # support 1cm + 1mm etc..
-for sym in (:+, :-, :*, :/)
+for sym in (:+, :-, :*)
   @eval Base.$sym{T<:Unit}(a::T, b::T) = T($sym(a.value, b.value))
   @eval Base.$sym{A<:Unit,B<:Unit}(a::A, b::B) = begin
     T = promote_type(A, B)
@@ -81,11 +81,26 @@ abbr{Num,Den}(::Type{Ratio{Num,Den}}) = string(abbr(Num), '/', abbr(Den))
 Base.:/{T<:Unit}(a::Unit, b::Type{T}) = Ratio{typeof(a),T}(a.value)
 Base.:/{Num<:Unit,Den<:Unit}(a::Type{Num}, b::Type{Den}) = Ratio{Num,Den}
 
+# handle 5s * (1m/s)
+Base.:*{T<:Unit,O<:Unit}(a::T, b::Ratio{O,<:Unit}) = O(a.value * convert(Ratio{O,T}, b).value)
+Base.:*(a::Ratio, b::Unit) = b * a
+
+# enable 1m/5s and 1minute/5s
+Base.:/{T<:Unit}(a::T, b::T) = T(a.value/b.value)
+Base.:/{A<:Unit,B<:Unit}(a::A, b::B) = begin
+  if promote_rule(A, B) === Union{}
+    Ratio{A,B}(a.value / b.value)
+  else
+    T = promote_type(A, B)
+    T(convert(T, a).value/convert(T, b).value)
+  end
+end
+
 # enable promote(1m/s, 2km/hr) == (1m/s, 7200m/s)
 Base.promote_rule{NA,DA,NB,DB}(a::Type{Ratio{NA,DA}}, b::Type{Ratio{NB,DB}}) =
-  Ratio{promote_rule(NA,NB), promote_rule(DA,DB)}
+  Ratio{promote_type(NA,NB), promote_type(DA,DB)}
 Base.convert{N1,D1,N2,D2}(T::Type{Ratio{N2,D2}}, r::Ratio{N1,D1}) =
-  T(r.value * basefactor(N1)//basefactor(N2) * basefactor(D2)//basefactor(D1))
+  T(r.value * basefactor(N1)/basefactor(N2) * basefactor(D2)/basefactor(D1))
 
 abstract type Size{dimensions} <: Unit end
 const Length = Size{1}
@@ -105,7 +120,7 @@ for (factor, name) in imperial_units
   @eval const $(Symbol(name, '³')) = ImperialSize{$factor, 3}
 end
 
-abbr{d,f}(::Type{ImperialSize{f,d}}) = string(imperial_units[f], d > 1 ? exponent[Int(d)] : "")
+abbr{d,f}(::Type{ImperialSize{f,d}}) = string(imperial_units[f], d > 1 ? exponents[Int(d)] : "")
 basefactor{f,d}(s::Type{ImperialSize{f,d}}) = f
 
 Base.promote_rule{f1,f2,d}(::Type{ImperialSize{f1,d}},::Type{ImperialSize{f2,d}}) =
@@ -128,7 +143,7 @@ const litre = Meter{Rational(3),-1}
 const cm³   = Meter{Rational(3), -2}
 const mm³   = Meter{Rational(3), -3}
 
-abbr{d,m}(::Type{Meter{d,m}}) = string(get(prefix, m, ""), 'm', d > 1 ? exponent[Int(d)] : "")
+abbr{d,m}(::Type{Meter{d,m}}) = string(get(prefix, m, ""), 'm', d > 1 ? exponents[Int(d)] : "")
 basefactor{d,m}(::Type{Meter{d,m}}) = (Rational(10) ^ m) ^ d
 
 # support `m^2`
@@ -155,7 +170,9 @@ end
 for sym in (:*, :/)
   @eval Base.$sym{d1,d2,m1,m2}(a::Meter{d1,m1}, b::Meter{d2,m2}) = $sym(promote_magnitude(a, b)...)
   @eval Base.$sym{d1,d2,m}(a::Meter{d1,m}, b::Meter{d2,m}) = begin
-    Meter{$(sym == :* ? :+ : :-)(d1, d2),m}($sym(a.value, b.value))
+    d = $(sym == :* ? :+ : :-)(d1, d2)
+    v = $sym(a.value, b.value)
+    d == 0 ? v : Meter{d,m}(v)
   end
 end
 
@@ -181,9 +198,9 @@ Base.promote_rule{f1,f2}(::Type{Time{f1}},::Type{Time{f2}}) = Time{min(f1,f2)}
 Base.convert{f1,f2}(T::Type{Time{f2}}, s::Time{f1}) =
   T(s.value * basefactor(typeof(s))/basefactor(T))
 
-const Speed{s<:Size,t<:Time} = Ratio{s,t}
-const Acceleration{s<:Size,t<:Time} = Ratio{Speed{s,t},t}
-const Jerk{s<:Size,t<:Time} = Ratio{Acceleration{s,t},t}
+const Speed = Ratio{<:Size,<:Time}
+const Acceleration = Ratio{<:Speed,<:Time}
+const Jerk = Ratio{<:Acceleration,<:Time}
 
 abstract type Angle <: Unit end
 struct Degree <: Angle value::Real end
@@ -229,3 +246,5 @@ abbr(::Type{Gram{6}}) = "ton"
 basefactor{m}(::Type{Gram{m}}) = 10^m
 Base.promote_rule{a,b}(::Type{Gram{a}}, ::Type{Gram{b}}) = Gram{min(a,b)}
 Base.convert{A<:Gram}(::Type{A}, b::Gram) = A(b.value * (basefactor(typeof(b))/basefactor(A)))
+
+const Pressure = Ratio{<:Weight,<:Area}
