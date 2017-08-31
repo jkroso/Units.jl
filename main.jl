@@ -124,8 +124,8 @@ end
 
 # enable `m/s`
 Base.:/(A::Type{<:Dimension}, B::Type{<:Dimension}) = Ratio{A,B}
-# enable `1m/s`
-Base.:/(a::A, b::Type{B}) where {A<:Dimension,B<:Dimension} = Ratio{A,B}(a)
+# enable `1m/s` && 1m/s²
+Base.:/(a::A, b::Type{B}) where {A<:Dimension,B<:Unit} = Ratio{A,B}(a)
 # enable 1s/5s
 Base.:/(a::T, b::T) where T<:Dimension = precise(a.value)/precise(b.value)
 # enable 1m/5s
