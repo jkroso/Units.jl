@@ -89,6 +89,15 @@ const km = Meter{3}
 const m  = Meter{0}
 const cm = Meter{-2}
 const mm = Meter{-3}
+const km² = Area{km}
+const m² = Area{m}
+const cm² = Area{cm}
+const mm² = Area{mm}
+const mm³ = Volume{mm}
+const cm³ = Volume{cm}
+const m³ = Volume{m}
+const km³ = Volume{km}
+const litre = Volume{Meter{-1}}
 
 abbr(M::Type{<:Meter}) = string(get(prefix, magnitude(M), ""), 'm')
 magnitude(::Type{Meter{m}}) where m = m
@@ -172,14 +181,18 @@ Base.convert(::Type{Exponent}, u::Exponent) = u
 Base.convert(::Type{Exponent{n,TA}}, b::Exponent{n,TB}) where {n,TA,TB} =
   Exponent{n,TA}(convert_value(TA,TB,b.value))
 
-# 1m¹/2m¹ => 0.5
+# 1m²/2m² => 0.5
 Base.:/(a::Exponent{da,T}, b::Exponent{db,T}) where {da,db,T} = begin
   d = da - db
   v = a.value/b.value
-  d == 0 ? v : Exponent{d,T}(v)
+  d == 0 ? v : d == 1 ? T(v) : Exponent{d,T}(v)
 end
 # 1m²/2m => 0.5m
 Base.:/(a::Unit, b::Unit) = convert(Exponent, a) / convert(Exponent, b)
+
+# promote(1cm², 1m²) => (1cm, 100cm)
+Base.promote_rule(::Type{Exponent{d,TA}}, ::Type{Exponent{d,TB}}) where {d,TA,TB} =
+  Exponent{d,promote_type(TA,TB)}
 
 const time_factors = Dict(-1000 => :ms,
                           1 => :s,
@@ -196,7 +209,7 @@ end
 abbr(::Type{Time{f}}) where f = string(time_factors[f])
 basefactor(::Type{Time{f}}) where f = f
 
-# support Base.promote(1s, 1hr) == (1s, 3600s)
+# support promote(1s, 1hr) == (1s, 3600s)
 Base.promote_rule(::Type{Time{f1}},::Type{Time{f2}}) where {f1,f2} = Time{min(f1,f2)}
 Base.convert(T::Type{Time{f2}}, s::Time{f1}) where {f1,f2} =
   T(s.value * basefactor(typeof(s))/basefactor(T))
@@ -231,7 +244,7 @@ abbr(::Type{Kelvin}) = "K"
 abbr(::Type{Celsius}) = "°C"
 abbr(::Type{Fahrenheit}) = "°F"
 basefactor(::Type{Fahrenheit}) = 5//9
-baseoffset(::Type{Kelvin}) = 0
+baseoffset(::Type{Kelvin}) = Rational(0)
 baseoffset(::Type{Fahrenheit}) = Rational(459.67)
 baseoffset(::Type{Celsius}) = Rational(273.15)
 Base.promote_rule(::Type{<:Temperature}, ::Type{<:Temperature}) = Kelvin
