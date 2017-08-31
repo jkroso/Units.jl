@@ -36,7 +36,7 @@ abstract type Temperature <: Dimension end
 abstract type DerivedUnit <: Unit end
 
 "Represents units like m/s"
-struct Ratio{Num<:Unit,Den<:Unit} <: DerivedUnit value::Real end
+struct Ratio{Num<:Unit,Den<:Unit} <: DerivedUnit value::Num end
 
 "Represents units like m²"
 struct Exponent{dimensions,D<:Dimension} <: DerivedUnit value::Real end
@@ -81,6 +81,11 @@ Base.show(io::IO, t::Unit) = begin
   write(io, abbr(typeof(t)))
 end
 
+Base.show(io::IO, r::Ratio{N,D}) where {N,D} = begin
+  show(io, r.value)
+  write(io, '/', abbr(D))
+end
+
 Base.:(==)(a::U,b::U) where U<:Unit = convert(Real, a) == convert(Real, b)
 Base.convert(::Type{N}, u::U) where {N<:Real,U<:Unit} = convert(N, precise(u.value) * basefactor(U))
 Base.convert(::Type{U}, n::Real) where U<:Unit = U(n)
@@ -120,16 +125,15 @@ end
 # enable `m/s`
 Base.:/(A::Type{<:Dimension}, B::Type{<:Dimension}) = Ratio{A,B}
 # enable `1m/s`
-Base.:/(a::A, b::Type{B}) where {A<:Dimension,B<:Dimension} = Ratio{A,B}(a.value)
+Base.:/(a::A, b::Type{B}) where {A<:Dimension,B<:Dimension} = Ratio{A,B}(a)
 # enable 1s/5s
 Base.:/(a::T, b::T) where T<:Dimension = precise(a.value)/precise(b.value)
 # enable 1m/5s
 Base.:/(a::A, b::B) where {A<:Dimension,B<:Dimension} = Ratio{A,B}(precise(a.value)/precise(b.value))
 
-# enable 5s * (1m/s)
+# 5s * (1m/s) => 5m
 Base.:*(a::Unit, b::Ratio{Out,<:Unit}) where Out<:Unit =
   Out(precise(a.value) * convert(Ratio{Out,typeof(a)}, b).value)
-# enable (1m/s) * 5s
 Base.:*(a::Ratio, b::Unit) = b * a
 
 # enable promote(1m/s, 2km/hr) == (1m/s, 7200m/s)
