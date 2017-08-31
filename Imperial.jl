@@ -20,7 +20,7 @@ abbr(::Type{ImperialLength{f}}) where f = string(imperial_units[f])
 Base.promote_rule(::Type{ImperialLength{f1}},::Type{ImperialLength{f2}}) where {f1,f2} =
   ImperialLength{min(f1,f2)}
 Base.convert(T::Type{ImperialLength{f2}}, s::ImperialLength{f1}) where {f1,f2} =
-  T(s.value * basefactor(typeof(s))/basefactor(T))
+  T(s.value * f1/f2)
 
 # promote(1ft, 1m)
 Base.promote_rule(::Type{ImperialLength{f}}, ::Type{Meter{m}}) where {f,m} = Meter{0}
