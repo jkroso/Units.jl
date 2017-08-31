@@ -52,7 +52,7 @@ Get the magnitude of a Dimension
 `magnitude(m) = 0`
 `magnitude(km) = 3`
 """
-magnitude(::Type{T}) where T<:Dimension = 1
+magnitude(::Type{<:Dimension}) = 1
 
 """
 Compute the factor required to convert a Unit of any magnitude
@@ -61,7 +61,8 @@ to one with a magnitude of 1
 `basefactor(km) == 1000`
 `basefactor(m) == 1`
 """
-basefactor(::Type{T}) where T<:Dimension = 10^magnitude(T)
+basefactor(::Type{T}) where T<:Dimension = Rational(10)^magnitude(T) # Rational allows 10^-1
+basefactor(::Type{Exponent{d,D}}) where {d,D} = basefactor(D)^d
 
 "Convert to the most precise type possible"
 precise(n::Number) = n
@@ -132,8 +133,8 @@ Base.:/(a::T, b::T) where T<:Dimension = precise(a.value)/precise(b.value)
 Base.:/(a::A, b::B) where {A<:Dimension,B<:Dimension} = Ratio{A,B}(precise(a.value)/precise(b.value))
 
 # 5s * (1m/s) => 5m
-Base.:*(a::Unit, b::Ratio{Out,<:Unit}) where Out<:Unit =
-  Out(precise(a.value) * convert(Ratio{Out,typeof(a)}, b).value)
+Base.:*(a::Unit, b::Ratio{<:Unit,B}) where B<:Unit =
+  b.value * convert(B, a).value
 Base.:*(a::Ratio, b::Unit) = b * a
 
 # enable promote(1m/s, 2km/hr) == (1m/s, 7200m/s)
@@ -165,21 +166,22 @@ Base.convert(T::Type{<:Meter}, s::Meter{m}) where m =
 
 # 1m¹ * 2m¹ => 2m²
 Base.:*(a::Exponent{da,T}, b::Exponent{db,T}) where {da,db,T} = Exponent{da+db, T}(a.value * b.value)
+# (1mm²) * (2cm^1) => 20mm³
 Base.:*(a::Exponent{da,TA}, b::Exponent{db,TB}) where {da,db,TA,TB} = begin
   T = promote_type(TA, TB)
-  v = convert_value(T, TA, a.value) * convert_value(T, TB, b.value)
-  Exponent{da+db, T}(v)
+  av = precise(a.value) * basefactor(TA)/basefactor(T)
+  bv = precise(b.value) * basefactor(TB)/basefactor(T)
+  Exponent{da + db, T}(av * bv)
 end
-
-convert_value(A::Type, B::Type, bv::Number) = precise(bv) * (basefactor(B)/basefactor(A))
 
 # 1m * 2m => 2m²
 Base.:*(a::Unit, b::Unit) = convert(Exponent, a) * convert(Exponent, b)
 Base.convert(::Type{Exponent}, d::Dimension) = Exponent{1,typeof(d)}(d.value)
 Base.convert(::Type{Exponent}, u::Exponent) = u
-# 1cm² * 2m => 200cm³
-Base.convert(::Type{Exponent{n,TA}}, b::Exponent{n,TB}) where {n,TA,TB} =
-  Exponent{n,TA}(convert_value(TA,TB,b.value))
+
+# convert(m³, 1000_000_000mm³) => 1m³
+Base.convert(T::Type{Exponent{n,TA}}, b::B) where {n,TA,TB,B<:Exponent{n,TB}} =
+  T(precise(b.value) * basefactor(B)/basefactor(T))
 
 # 1m²/2m² => 0.5
 Base.:/(a::Exponent{da,T}, b::Exponent{db,T}) where {da,db,T} = begin
