@@ -1,3 +1,3 @@
 # Units (Experiment)
 
-This is an attempt to create a unit library for Julia which enables you to dispatch on the abstract unit type. I've implemented enough of the abstract type `Size` that I feel confident it will work for all types. However, it requires some runtime overhead. Which other implementations don't have.
+This is just an attempt to implement [Unitful.jl](https://github.com/ajkeller34/Unitful.jl) in a way that I'm able to understand. But it's objectivly worse by every other metric.
