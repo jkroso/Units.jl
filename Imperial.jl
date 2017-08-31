@@ -1,4 +1,4 @@
-@require "." Length Exponent basefactor abbr Meter Area Volume
+@require "." Length Exponent basefactor abbr Meter Area Volume precise
 
 const imperial_units = Dict(1609344//1000 => :mile,
                             9144//10000 => :yard,
@@ -20,8 +20,8 @@ abbr(::Type{ImperialLength{f}}) where f = string(imperial_units[f])
 Base.promote_rule(::Type{ImperialLength{f1}},::Type{ImperialLength{f2}}) where {f1,f2} =
   ImperialLength{min(f1,f2)}
 Base.convert(T::Type{ImperialLength{f2}}, s::ImperialLength{f1}) where {f1,f2} =
-  T(s.value * f1/f2)
+  T(precise(s.value) * f1/f2)
 
 # promote(1ft, 1m)
 Base.promote_rule(::Type{ImperialLength{f}}, ::Type{Meter{m}}) where {f,m} = Meter{0}
-Base.convert(T::Type{<:Meter}, s::ImperialLength{f}) where f = convert(T, Meter{0}(s.value * f))
+Base.convert(T::Type{<:Meter}, s::ImperialLength{f}) where f = convert(T, Meter{0}(precise(s.value) * f))
