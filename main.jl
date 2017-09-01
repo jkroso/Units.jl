@@ -87,8 +87,9 @@ Base.show(io::IO, r::Ratio{N,D}) where {N,D} = begin
   write(io, '/', abbr(D))
 end
 
-Base.:(==)(a::U,b::U) where U<:Unit = convert(Real, a) == convert(Real, b)
+# convert(Real, 1km) == 1000
 Base.convert(::Type{N}, u::U) where {N<:Real,U<:Unit} = convert(N, precise(u.value) * basefactor(U))
+# convert(km, 1) == 1km
 Base.convert(::Type{U}, n::Real) where U<:Unit = U(n)
 
 const Area = Exponent{2,L} where L<:Length
@@ -271,3 +272,16 @@ Base.promote_rule{a,b}(::Type{Gram{a}}, ::Type{Gram{b}}) = Gram{min(a,b)}
 Base.convert{A<:Gram}(::Type{A}, b::Gram) = A(precise(b.value) * (basefactor(typeof(b))/basefactor(A)))
 
 const Pressure = Ratio{<:Mass,<:Area}
+
+for λ ∈ (:<, :>, :!=, :(==))
+  @eval begin
+    # 1g < 2g == true
+    Base.$λ(a::T,b::T) where T<:Unit = $λ(a.value, b.value)
+    # 1kg < 2g == false
+    Base.$λ(a::Unit,b::Unit) = $λ(promote(a,b)...)
+    # 1kg < 2 == false
+    Base.$λ(a::Real,b::Unit) = $λ(a, convert(Real, b))
+    # 1 < 1kg == true
+    Base.$λ(a::Unit,b::Real) = $λ(convert(Real, a), b)
+  end
+end
