@@ -121,6 +121,8 @@ end
 for sym in (:+, :-)
   @eval Base.$sym(a::T, b::T) where T<:Unit = T($sym(precise(a.value), precise(b.value)))
   @eval Base.$sym(a::A, b::B) where {A<:Unit,B<:Unit} = $sym(promote(a, b)...)
+  # -(1m) == -1m
+  @eval Base.$sym(a::T) where T<:Unit = T($sym(a.value))
 end
 
 # m/s == Ratio{m,s}
