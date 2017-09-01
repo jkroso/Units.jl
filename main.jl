@@ -108,63 +108,67 @@ const litre = Volume{Meter{-1}}
 abbr(M::Type{<:Meter}) = string(get(prefix, magnitude(M), ""), 'm')
 magnitude(::Type{Meter{m}}) where m = m
 
-# support `2cm`
+# 2cm == Meter{-2}(2)
 Base.:*(n::Real, ::Type{T}) where T<:Unit = T(n)
 
-# support `3 * 1cm` etc..
+# 3 * 1cm == 3cm
 for op in (:*, :/, :+, :-)
   @eval Base.$op(n::Real, u::T) where T<:Unit = T($op(precise(u.value), precise(n)))
   @eval Base.$op(u::T, n::Real) where T<:Unit = T($op(precise(u.value), precise(n)))
 end
 
-# support 1cm + 1mm etc..
+# 1cm + 1mm == 11mm && 1cm - 1mm == 9mm
 for sym in (:+, :-)
   @eval Base.$sym(a::T, b::T) where T<:Unit = T($sym(precise(a.value), precise(b.value)))
   @eval Base.$sym(a::A, b::B) where {A<:Unit,B<:Unit} = $sym(promote(a, b)...)
 end
 
-# enable `m/s`
+# m/s == Ratio{m,s}
 Base.:/(A::Type{<:Dimension}, B::Type{<:Dimension}) = Ratio{A,B}
-# enable `1m/s` && 1m/s²
+# 1m/s == Ratio{m,s}(1) && 1m/s^2 == Ratio{m,s^2}
 Base.:/(a::A, b::Type{B}) where {A<:Dimension,B<:Unit} = Ratio{A,B}(a)
-# enable 1s/5s
+# 1s/5s == 0.2
 Base.:/(a::T, b::T) where T<:Dimension = precise(a.value)/precise(b.value)
-# enable 1m/5s
+# 1m²/2m² == 0.5
+Base.:/(a::Exponent{da,T}, b::Exponent{db,T}) where {da,db,T} = begin
+  d = da - db
+  v = precise(a.value)/precise(b.value)
+  d == 0 ? v : d == 1 ? T(v) : Exponent{d,T}(v)
+end
+# 1m/5s == 0.2m/s
 Base.:/(a::A, b::B) where {A<:Dimension,B<:Dimension} = Ratio{A,B}(precise(a.value)/precise(b.value))
+# 1.1s²/1m² == 1.1s²/m²
+Base.:/(a::A, b::B) where {A<:Exponent,B<:Exponent} = Ratio{A,B}(precise(a.value)/precise(b.value))
+# 1.1s/1m² == 1.1s/m²
+Base.:/(a::A, b::B) where {A<:Dimension,B<:Exponent} = Ratio{A,B}(precise(a.value)/precise(b.value))
+# 1.1s²/1m == 1.1s²/m
+Base.:/(a::A, b::B) where {A<:Exponent,B<:Dimension} = Ratio{A,B}(precise(a.value)/precise(b.value))
+# 1m²/2m == 0.5m
+Base.:/(a::Unit, b::Unit) = convert(Exponent, a) / convert(Exponent, b)
 
-# 5s * (1m/s) => 5m
+# 5s * (1m/s) == 5m
 Base.:*(a::Unit, b::Ratio{<:Unit,B}) where B<:Unit =
   b.value * convert(B, a).value
 Base.:*(a::Ratio, b::Unit) = b * a
 
-# enable promote(1m/s, 2km/hr) == (1m/s, 7200m/s)
+# promote(1m/s, 2km/hr) == (1m/s, 7200m/s)
 Base.promote_rule(a::Type{Ratio{NA,DA}}, b::Type{Ratio{NB,DB}}) where {NA,DA,NB,DB} =
   Ratio{promote_type(NA,NB), promote_type(DA,DB)}
 Base.convert(T::Type{Ratio{N2,D2}}, r::Ratio{N1,D1}) where {N1,D1,N2,D2} =
   T(precise(r.value) * basefactor(N1)/basefactor(N2) * basefactor(D2)/basefactor(D1))
 
-# support m^2
+# m^2 == m²
 Base.:^(::Type{U}, n::Integer) where U<:Unit = Exponent{n,U}
-# support m²^2
+# m²^2 == Exponent{4,m}
 Base.:^(::Type{Exponent{d,T}}, n::Integer) where {d,T} = Exponent{d*n,T}
-# (1m²)^2 => 1m⁴
+# (1m²)^2 == 1m⁴
 Base.:^(u::Exponent{d,T}, n::Integer) where {d,T} = Exponent{d*n,T}(precise(u.value) ^ n)
 
-# m * m
+# m * m == m²
 Base.:*(::Type{Exponent{da,T}}, ::Type{Exponent{db,T}}) where {da,db,T<:Unit} = Exponent{da+db,T}
+# m * m² == m³
 Base.:*(::Type{A}, ::Type{B}) where {A<:Unit,B<:Unit} = convert(Exponent, A) * convert(Exponent, B)
-
-Base.sqrt(s::Exponent{d,T}) where {d,T} = begin
-  n = Int(d/2)
-  n == 1 ? T(sqrt(s.value)) : Exponent{n,T}(sqrt(s.value))
-end
-
-# support Base.promote(1mm, 2m) == (1mm, 2000mm)
-Base.promote_rule(::Type{Meter{m1}},::Type{Meter{m2}}) where {m1,m2} = Meter{min(m1,m2)}
-Base.convert(T::Type{<:Meter}, s::Meter{m}) where m =
-  T(precise(s.value) * (10^m)/basefactor(T))
-
-# 1m¹ * 2m¹ => 2m²
+# 1m¹ * 2m¹ == 2m²
 Base.:*(a::Exponent{da,T}, b::Exponent{db,T}) where {da,db,T} = Exponent{da+db, T}(a.value * b.value)
 # (1mm²) * (2cm^1) => 20mm³
 Base.:*(a::Exponent{da,TA}, b::Exponent{db,TB}) where {da,db,TA,TB} = begin
@@ -179,22 +183,23 @@ Base.:*(a::Unit, b::Unit) = convert(Exponent, a) * convert(Exponent, b)
 Base.convert(::Type{Exponent}, d::Dimension) = Exponent{1,typeof(d)}(d.value)
 Base.convert(::Type{Exponent}, u::Exponent) = u
 
-# convert(m³, 1000_000_000mm³) => 1m³
+# promote(1cm², 1m²) == (1cm, 100cm)
+Base.promote_rule(::Type{Exponent{d,TA}}, ::Type{Exponent{d,TB}}) where {d,TA,TB} =
+  Exponent{d,promote_type(TA,TB)}
+
+# convert(m³, 1000_000_000mm³) == 1m³
 Base.convert(T::Type{Exponent{n,TA}}, b::B) where {n,TA,TB,B<:Exponent{n,TB}} =
   T(precise(b.value) * basefactor(B)/basefactor(T))
 
-# 1m²/2m² => 0.5
-Base.:/(a::Exponent{da,T}, b::Exponent{db,T}) where {da,db,T} = begin
-  d = da - db
-  v = precise(a.value)/precise(b.value)
-  d == 0 ? v : d == 1 ? T(v) : Exponent{d,T}(v)
-end
-# 1m²/2m => 0.5m
-Base.:/(a::Unit, b::Unit) = convert(Exponent, a) / convert(Exponent, b)
+# promote(1mm, 2m) == (1mm, 2000mm)
+Base.promote_rule(::Type{Meter{m1}},::Type{Meter{m2}}) where {m1,m2} = Meter{min(m1,m2)}
+Base.convert(T::Type{<:Meter}, s::Meter{m}) where m =
+  T(precise(s.value) * (10^m)/basefactor(T))
 
-# promote(1cm², 1m²) => (1cm, 100cm)
-Base.promote_rule(::Type{Exponent{d,TA}}, ::Type{Exponent{d,TB}}) where {d,TA,TB} =
-  Exponent{d,promote_type(TA,TB)}
+Base.sqrt(s::Exponent{d,T}) where {d,T} = begin
+  n = Int(d/2)
+  n == 1 ? T(sqrt(s.value)) : Exponent{n,T}(sqrt(s.value))
+end
 
 const time_factors = Dict(-1000 => :ms,
                           1 => :s,
@@ -211,7 +216,7 @@ end
 abbr(::Type{Time{f}}) where f = string(time_factors[f])
 basefactor(::Type{Time{f}}) where f = f
 
-# support promote(1s, 1hr) == (1s, 3600s)
+# promote(1s, 1hr) == (1s, 3600s)
 Base.promote_rule(::Type{Time{f1}},::Type{Time{f2}}) where {f1,f2} = Time{min(f1,f2)}
 Base.convert(T::Type{Time{f2}}, s::Time{f1}) where {f1,f2} =
   T(precise(s.value) * basefactor(typeof(s))/basefactor(T))
