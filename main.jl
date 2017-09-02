@@ -134,7 +134,9 @@ end
 # 2m²/1m² == 2
 Base.:/(a::A, b::A) where A<:Exponent = precise(a.value)/precise(b.value)
 # m/s == Ratio{m,s}
-Base.:/(A::Type{<:Dimension}, B::Type{<:Dimension}) = Ratio{A,B}
+# s/m² == Ratio{Time{1},Exponent{2,Meter{0}}}
+Base.:/(A::Type{<:Unit}, B::Type{<:Unit}) = Ratio{A,B}
+
 # 1m/s == Ratio{m,s}(1)
 # 1m/s^2 == Ratio{m,s^2}(1)
 # 1m²/s^2 == Ratio{m²,s^2}(1)
