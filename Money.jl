@@ -9,6 +9,7 @@ end
 abstract type Money <: Dimension end
 struct Dollar{nation} <: Money value::Real end
 
+# sprint(show, 1NZD) == "1.00 NZD"
 Base.show(io::IO, d::Dollar) = @printf(io, "%0.2f %s", d.value, abbr(typeof(d)))
 
 abbr(::Type{Dollar{c}}) where c = string(c)

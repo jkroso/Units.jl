@@ -68,6 +68,11 @@ basefactor(::Type{Exponent{d,D}}) where {d,D} = basefactor(D)^d
 precise(n::Number) = n
 precise(n::AbstractFloat) = rationalize(n)
 
+"Convert derived dimensions into plain dimensions where possible"
+simplify(::Type{Exponent{1,T}}) where T = T
+simplify(::Type{Exponent{0,T}}) where T = Real
+simplify(::Type{T}) where T<:Exponent = T
+
 abbr(::Type{Ratio{A,B}}) where {A,B} = string(abbr(A), '/', abbr(B))
 abbr(::Type{Exponent{n,T}}) where {n,T} = string(abbr(T), exponents[Int(n)])
 
@@ -126,54 +131,67 @@ for sym in (:+, :-)
   @eval Base.$sym(a::T) where T<:Unit = T($sym(a.value))
 end
 
+# 2m²/1m² == 2
+Base.:/(a::A, b::A) where A<:Exponent = precise(a.value)/precise(b.value)
 # m/s == Ratio{m,s}
 Base.:/(A::Type{<:Dimension}, B::Type{<:Dimension}) = Ratio{A,B}
-# 1m/s == Ratio{m,s}(1) && 1m/s^2 == Ratio{m,s^2}
-Base.:/(a::A, b::Type{B}) where {A<:Dimension,B<:Unit} = Ratio{A,B}(a)
+# 1m/s == Ratio{m,s}(1)
+# 1m/s^2 == Ratio{m,s^2}(1)
+# 1m²/s^2 == Ratio{m²,s^2}(1)
+Base.:/(a::A, b::Type{B}) where {A<:Unit,B<:Unit} = Ratio{A,B}(a)
 # 1s/5s == 0.2
 Base.:/(a::T, b::T) where T<:Dimension = precise(a.value)/precise(b.value)
-# 1m²/2m² == 0.5
-Base.:/(a::Exponent{da,T}, b::Exponent{db,T}) where {da,db,T} = begin
-  d = da - db
-  v = precise(a.value)/precise(b.value)
-  d == 0 ? v : d == 1 ? T(v) : Exponent{d,T}(v)
+# 1m²/200cm² == 50 && 1m³/200cm² == 5000cm
+# (2m^4)/(2m²) == 1m²
+# (1.1s^2)/1m² == (1.1s^2)/m²
+Base.:/(a::Exponent{da,TA}, b::Exponent{db,TB}) where {da,db,TA<:Dimension,TB<:Dimension} = begin
+  T = promote_rule(TA, TB)
+  if T == Union{}
+    T = Ratio{simplify(typeof(a)),simplify(typeof(b))}
+    T(precise(a.value)/precise(b.value))
+  else
+    av = convert(Exponent{da,T}, a).value
+    bv = convert(Exponent{db,T}, b).value
+    simplify(Exponent{da-db,T})(av/bv)
+  end
 end
 # 1m/5s == 0.2m/s
 Base.:/(a::A, b::B) where {A<:Dimension,B<:Dimension} = Ratio{A,B}(precise(a.value)/precise(b.value))
-# 1.1s²/1m² == 1.1s²/m²
-Base.:/(a::A, b::B) where {A<:Exponent,B<:Exponent} = Ratio{A,B}(precise(a.value)/precise(b.value))
 # 1.1s/1m² == 1.1s/m²
 Base.:/(a::A, b::B) where {A<:Dimension,B<:Exponent} = Ratio{A,B}(precise(a.value)/precise(b.value))
-# 1.1s²/1m == 1.1s²/m
-Base.:/(a::A, b::B) where {A<:Exponent,B<:Dimension} = Ratio{A,B}(precise(a.value)/precise(b.value))
-# 1m²/2m == 0.5m
+# (1.1s^2)/1m == 1.1s^2/m && 1m²/2m == 0.5m
 Base.:/(a::Unit, b::Unit) = convert(Exponent, a) / convert(Exponent, b)
 
-# 5s * (1m/s) == 5m
-Base.:*(a::Unit, b::Ratio{<:Unit,B}) where B<:Unit =
-  b.value * convert(B, a).value
-Base.:*(a::Ratio, b::Unit) = b * a
-
-# promote(1m/s, 2km/hr) == (1m/s, 7200m/s)
+# promote(1m/s, 9km/hr) == (1m/s, 2.5m/s)
 Base.promote_rule(a::Type{Ratio{NA,DA}}, b::Type{Ratio{NB,DB}}) where {NA,DA,NB,DB} =
   Ratio{promote_type(NA,NB), promote_type(DA,DB)}
+# convert(m/s, 9km/hr) == 2.5m/s
 Base.convert(T::Type{Ratio{N2,D2}}, r::Ratio{N1,D1}) where {N1,D1,N2,D2} =
-  T(precise(r.value) * basefactor(N1)/basefactor(N2) * basefactor(D2)/basefactor(D1))
+  T(precise(r.value.value) * basefactor(N1)/basefactor(N2) * basefactor(D2)/basefactor(D1))
 
 # m^2 == m²
 Base.:^(::Type{U}, n::Integer) where U<:Unit = Exponent{n,U}
 # m²^2 == Exponent{4,m}
 Base.:^(::Type{Exponent{d,T}}, n::Integer) where {d,T} = Exponent{d*n,T}
-# (1m²)^2 == 1m⁴
+# (1m²)^2 == 1m^4
 Base.:^(u::Exponent{d,T}, n::Integer) where {d,T} = Exponent{d*n,T}(precise(u.value) ^ n)
 
-# m * m == m²
+# 1m * 2m == 2m²
+Base.:*(a::Unit, b::Unit) = convert(Exponent, a) * convert(Exponent, b)
+# 5s * (1m/s) == 5m
+Base.:*(a::Unit, b::Ratio{<:Unit,B}) where B<:Unit =
+  b.value * convert(B, a).value
+Base.:*(a::Ratio, b::Unit) = b * a
+# m * m == m² && m * cm == cm²
+Base.:*(::Type{A}, ::Type{B}) where {A<:Dimension,B<:Dimension} = Exponent{2,promote_type(A,B)}
+# m^1 * m² == m³
 Base.:*(::Type{Exponent{da,T}}, ::Type{Exponent{db,T}}) where {da,db,T<:Unit} = Exponent{da+db,T}
 # m * m² == m³
-Base.:*(::Type{A}, ::Type{B}) where {A<:Unit,B<:Unit} = convert(Exponent, A) * convert(Exponent, B)
-# 1m¹ * 2m¹ == 2m²
+Base.:*(::Type{A}, ::Type{B}) where {A<:Dimension,B<:Exponent} = Exponent{1,A} * B
+Base.:*(::Type{B}, ::Type{A}) where {A<:Dimension,B<:Exponent} = Exponent{1,A} * B
+# 1m² * 2m² == 2m^4
 Base.:*(a::Exponent{da,T}, b::Exponent{db,T}) where {da,db,T} = Exponent{da+db, T}(a.value * b.value)
-# (1mm²) * (2cm^1) => 20mm³
+# 1mm² * 2cm² == 20mm^4
 Base.:*(a::Exponent{da,TA}, b::Exponent{db,TB}) where {da,db,TA,TB} = begin
   T = promote_type(TA, TB)
   av = precise(a.value) * basefactor(TA)/basefactor(T)
@@ -181,12 +199,10 @@ Base.:*(a::Exponent{da,TA}, b::Exponent{db,TB}) where {da,db,TA,TB} = begin
   Exponent{da + db, T}(av * bv)
 end
 
-# 1m * 2m => 2m²
-Base.:*(a::Unit, b::Unit) = convert(Exponent, a) * convert(Exponent, b)
 Base.convert(::Type{Exponent}, d::Dimension) = Exponent{1,typeof(d)}(d.value)
 Base.convert(::Type{Exponent}, u::Exponent) = u
 
-# promote(1cm², 1m²) == (1cm, 100cm)
+# promote(1cm², 1m²) == (1cm², 10_000cm²)
 Base.promote_rule(::Type{Exponent{d,TA}}, ::Type{Exponent{d,TB}}) where {d,TA,TB} =
   Exponent{d,promote_type(TA,TB)}
 
@@ -197,8 +213,9 @@ Base.convert(T::Type{Exponent{n,TA}}, b::B) where {n,TA,TB,B<:Exponent{n,TB}} =
 # promote(1mm, 2m) == (1mm, 2000mm)
 Base.promote_rule(::Type{Meter{m1}},::Type{Meter{m2}}) where {m1,m2} = Meter{min(m1,m2)}
 Base.convert(T::Type{<:Meter}, s::Meter{m}) where m =
-  T(precise(s.value) * (10^m)/basefactor(T))
+  T(precise(s.value) * ((10//1)^m)/basefactor(T))
 
+# sqrt(100m^2) == 10m
 Base.sqrt(s::Exponent{d,T}) where {d,T} = begin
   n = Int(d/2)
   n == 1 ? T(sqrt(s.value)) : Exponent{n,T}(sqrt(s.value))
@@ -238,8 +255,10 @@ abbr(::Type{Degree}) = "°"
 abbr(::Type{Radian}) = "rad"
 Base.promote_rule(::Type{<:Angle}, ::Type{<:Angle}) = Radian
 Base.convert(::Type{Radian}, d::Degree) = Radian(precise(d.value) * basefactor(Degree))
+# convert(Degree, 1rad) == 57.29577951308232°
 Base.convert(::Type{Degree}, r::Radian) = Degree(precise(r.value) / basefactor(Degree))
 
+# sin(20°) == sind(20)
 for sym in (:sin,:cos,:tan)
   @eval Base.$sym(n::Angle) = $sym(convert(Radian, n).value)
 end
@@ -275,13 +294,13 @@ const Pressure = Ratio{<:Mass,<:Area}
 
 for λ ∈ (:<, :>, :!=, :(==))
   @eval begin
-    # 1g < 2g == true
-    Base.$λ(a::T,b::T) where T<:Unit = $λ(a.value, b.value)
-    # 1kg < 2g == false
+    # 1g < 2g
+    Base.$λ(a::T,b::T) where T<:Unit = $λ(precise(a.value), precise(b.value))
+    # 1kg > 2g
     Base.$λ(a::Unit,b::Unit) = $λ(promote(a,b)...)
-    # 1kg < 2 == false
+    # 1kg > 2
     Base.$λ(a::Real,b::Unit) = $λ(a, convert(Real, b))
-    # 1 < 1kg == true
+    # 1 < 1kg
     Base.$λ(a::Unit,b::Real) = $λ(convert(Real, a), b)
   end
 end
