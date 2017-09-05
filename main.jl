@@ -254,16 +254,14 @@ Base.promote_rule(::Type{Meter{m1}},::Type{Meter{m2}}) where {m1,m2} = Meter{min
 
 struct Time{factor} <: Dimension value::Real end
 
-const time_factors = Dict{Rational,Symbol}(-1000 => :ms,
-                                            1 => :s,
-                                            60 => :minute,
-                                            3600 => :hr,
-                                            86400 => :day,
-                                            604800 => :week)
-
-abbr(::Type{Time{f}}) where f = String(time_factors[f])
+const time_factors = Dict{Rational,Symbol}(60 => :minute,
+                                           3600 => :hr,
+                                           86400 => :day,
+                                           604800 => :week)
+# abbr(Time{-1000_000_000_000//1}) == "ps"
+abbr(::Type{Time{f}}) where f =
+  String(get(time_factors, f, string(get(prefix, -round(Int, log(10, abs(f))), ""), 's')))
 basefactor(::Type{Time{f}}) where f = f
-
 # promote(1s, 1hr) == (1s, 3600s)
 Base.promote_rule(::Type{Time{f1}},::Type{Time{f2}}) where {f1,f2} = Time{min(f1,f2)}
 
@@ -330,9 +328,15 @@ end
 @export Acceleration = Ratio{<:Speed,<:Time}
 @export Jerk = Ratio{<:Acceleration,<:Time}
 
+# convert(s, 1ns) == 1e-9s
 for (factor,name) in time_factors
   @eval @export $name = Time{$factor}
 end
+for mag in (-3, -6, -9, -12)
+  name = Symbol(get(prefix, mag, ""), 's')
+  @eval @export $name = Time{$(Rational(10)^mag)}
+end
+@export s = Time{1}
 
 # define mm, km etc...
 for mag in (3, 0, -2, -3, -6, -9)
