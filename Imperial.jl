@@ -1,4 +1,4 @@
-@require "." Length Exponent basefactor abbr Meter m Area Volume precise
+@require "." basefactor abbr Meter exports...
 
 const imperial_units = Dict(1609344//1000 => :mile,
                             9144//10000 => :yard,

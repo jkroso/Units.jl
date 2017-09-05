@@ -151,23 +151,6 @@ Base.convert(::Type{U}, n::Real) where U<:Unit = U(n)
 # convert(km, 1000m) == 1km
 Base.convert(::Type{B}, a::A) where {A<:Unit,B<:Unit} = B(value(a) * conversion_factor(B, A))
 
-const Area = Exponent{2,L} where L<:Length
-const Volume = Exponent{3,L} where L<:Length
-
-struct Meter{magnitude} <: Length value::Real end
-
-# define mm, km etc...
-for mag in [3,0,-2,-3,-6]
-  name = Symbol(get(prefix, mag, ""), :m)
-  @eval const $name = Meter{$mag}
-  @eval const $(Symbol(name, '²')) = Area{$name}
-  @eval const $(Symbol(name, '³')) = Volume{$name}
-end
-const litre = Volume{Meter{-1}}
-
-abbr(M::Type{<:Meter}) = string(get(prefix, magnitude(M), ""), 'm')
-magnitude(::Type{Meter{m}}) where m = m
-
 # 2cm == Meter{-2}(2)
 Base.:*(n::Real, ::Type{T}) where T<:Unit = T(n)
 
@@ -256,14 +239,18 @@ Base.convert(::Type{Exponent}, u::Exponent) = u
 Base.promote_rule(::Type{Exponent{d,TA}}, ::Type{Exponent{d,TB}}) where {d,TA,TB} =
   Exponent{d,promote_type(TA,TB)}
 
-# promote(1mm, 2m) == (1mm, 2000mm)
-Base.promote_rule(::Type{Meter{m1}},::Type{Meter{m2}}) where {m1,m2} = Meter{min(m1,m2)}
-
 # sqrt(100m^2) == 10m
 Base.sqrt(s::Exponent{d,T}) where {d,T} = begin
   n = Int(d/2)
   n == 1 ? T(sqrt(value(s))) : Exponent{n,T}(sqrt(value(s)))
 end
+
+struct Meter{magnitude} <: Length value::Real end
+
+abbr(M::Type{<:Meter}) = string(get(prefix, magnitude(M), ""), 'm')
+magnitude(::Type{Meter{m}}) where m = m
+Base.promote_rule(::Type{Meter{m1}},::Type{Meter{m2}}) where {m1,m2} = Meter{min(m1,m2)}
+# promote(1mm, 2m) == (1mm, 2000mm)
 
 struct Time{factor} <: Dimension value::Real end
 
@@ -273,9 +260,6 @@ const time_factors = Dict{Rational,Symbol}(-1000 => :ms,
                                             3600 => :hr,
                                             86400 => :day,
                                             604800 => :week)
-for (factor,name) in time_factors
-  @eval const $name = Time{$factor}
-end
 
 abbr(::Type{Time{f}}) where f = String(time_factors[f])
 basefactor(::Type{Time{f}}) where f = f
@@ -283,15 +267,8 @@ basefactor(::Type{Time{f}}) where f = f
 # promote(1s, 1hr) == (1s, 3600s)
 Base.promote_rule(::Type{Time{f1}},::Type{Time{f2}}) where {f1,f2} = Time{min(f1,f2)}
 
-const Speed = Ratio{<:Length,<:Time}
-const Acceleration = Ratio{<:Speed,<:Time}
-const Jerk = Ratio{<:Acceleration,<:Time}
-
 struct Degree <: Angle value::Real end
 struct Radian <: Angle value::Real end
-const ° = Degree
-const rad = Radian
-
 basefactor(::Type{Degree}) = π/180
 abbr(::Type{Degree}) = "°"
 abbr(::Type{Radian}) = "rad"
@@ -309,9 +286,6 @@ end
 struct Kelvin <: Temperature value::Real end
 struct Celsius <: Temperature value::Real end
 struct Fahrenheit <: Temperature value::Real end
-const K = Kelvin
-const °C = Celsius
-const °F = Fahrenheit
 abbr(::Type{Kelvin}) = "K"
 abbr(::Type{Celsius}) = "°C"
 abbr(::Type{Fahrenheit}) = "°F"
@@ -324,15 +298,10 @@ Base.convert(::Type{Kelvin}, t::T) where T<:Union{Celsius,Fahrenheit} =
   Kelvin((precise(t.value) + baseoffset(T)) * basefactor(T))
 
 struct Gram{m} <: Mass value::Real end
-const g = Gram{0}
-const kg = Gram{3}
-const ton = Gram{6}
 magnitude(::Type{Gram{m}}) where m = m
 abbr(::Type{T}) where T<:Gram = string(get(prefix, magnitude(T), ""), "g")
 abbr(::Type{Gram{6}}) = "ton"
 Base.promote_rule{a,b}(::Type{Gram{a}}, ::Type{Gram{b}}) = Gram{min(a,b)}
-
-const Pressure = Ratio{<:Mass,<:Area}
 
 for λ ∈ (:<, :>, :!=, :(==))
   @eval begin
@@ -346,3 +315,44 @@ for λ ∈ (:<, :>, :!=, :(==))
     Base.$λ(a::Unit,b::Real) = $λ(convert(Real, a), b)
   end
 end
+
+@eval macro $:export(e)
+  quote
+    export $(esc(e.args[1]))
+    $(esc(Expr(:const, e)))
+  end
+end
+
+@export Area = Exponent{2,<:Length}
+@export Volume = Exponent{3,<:Length}
+@export Pressure = Ratio{<:Mass,<:Area}
+@export Speed = Ratio{<:Length,<:Time}
+@export Acceleration = Ratio{<:Speed,<:Time}
+@export Jerk = Ratio{<:Acceleration,<:Time}
+
+for (factor,name) in time_factors
+  @eval @export $name = Time{$factor}
+end
+
+# define mm, km etc...
+for mag in (3, 0, -2, -3, -6, -9)
+  name = Symbol(get(prefix, mag, ""), 'm')
+  @eval @export $name = Meter{$mag}
+  @eval @export $(Symbol(name, '²')) = Area{$name}
+  @eval @export $(Symbol(name, '³')) = Volume{$name}
+end
+@export litre = Volume{Meter{-1}}
+
+for mag in (3, 0, -3, -6, -9)
+  name = Symbol(get(prefix, mag, ""), 'g')
+  @eval @export $name = Gram{$mag}
+end
+@export ton = Gram{6}
+
+@export K = Kelvin
+@export °C = Celsius
+@export °F = Fahrenheit
+@export ° = Degree
+@export rad = Radian
+
+export Length, Mass, Time, Angle, Temperature, Ratio, Exponent

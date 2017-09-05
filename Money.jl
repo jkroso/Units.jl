@@ -1,5 +1,5 @@
-@require "." Dimension basefactor abbr Ratio Time
 @require "github.com/jkroso/Request.jl" GET
+@require "." abbr basefactor Dimension exports...
 
 const rates = let
   data = parse(GET("http://api.fixer.io/latest?base=USD"))["rates"]
