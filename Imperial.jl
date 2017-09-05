@@ -20,9 +20,6 @@ abbr(::Type{ImperialLength{f}}) where f = string(imperial_units[f])
 # promote(1inch, 1ft) == (1inch, 12inch)
 Base.promote_rule(::Type{ImperialLength{f1}},::Type{ImperialLength{f2}}) where {f1,f2} =
   ImperialLength{min(f1,f2)}
-Base.convert(T::Type{ImperialLength{f2}}, s::ImperialLength{f1}) where {f1,f2} =
-  T(precise(s.value) * f1/f2)
 
 # promote(1ft, 1m) == ((381//1250)m, 1m)
 Base.promote_rule(::Type{<:ImperialLength}, ::Type{<:Meter}) = m
-Base.convert(T::Type{<:Meter}, s::ImperialLength{f}) where f = convert(T, m(precise(s.value) * f))
