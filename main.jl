@@ -122,15 +122,34 @@ abbr(::Type{Exponent{n,T}}) where {n,T} = string(abbr(T), exponents[Int(n)])
 Base.exponent(::Type{T}) where T<:Unit = 1
 Base.exponent(::Type{Exponent{n,T}}) where {n,T} = n
 
-"Get a units abstract dimension type"
-dimension(::Type{Exponent{n,T}}) where {n,T} = Exponent{n,<:dimension(T)}
-dimension(::Type{Ratio{A,B}}) where {A,B} = Ratio{<:dimension(A), <:dimension(B)}
-dimension(::Type{T}) where T<:Dimension = supertype(T) == Dimension ? abstract_type(T) : supertype(T)
-# dimension(m²) == Exponent{2,<:Length}
-# dimension(m/s) == Ratio{<:Length,<:Time}
-# dimension(m) == Length
-# dimension(s) == Time
+"""
+Get a units abstract type
 
+```julia
+abstract_unit(m²) == Area
+abstract_unit(m) == Length
+```
+"""
+abstract_unit(::Type{Exponent{n,T}}) where {n,T} = Exponent{n,<:abstract_unit(T)}
+abstract_unit(::Type{Ratio{A,B}}) where {A,B} = Ratio{<:abstract_unit(A), <:abstract_unit(B)}
+abstract_unit(::Type{T}) where T<:Dimension = supertype(T) == Dimension ? abstract_type(T) : supertype(T)
+# abstract_unit(m²) == Exponent{2,<:Length}
+# abstract_unit(m/s) == Ratio{<:Length,<:Time}
+# abstract_unit(m) == Length
+# abstract_unit(s) == Time
+
+"""
+Find the abstract type a unit was derived from
+
+```julia
+dimension(m²) == Length
+dimension(m) == Length
+```
+"""
+dimension(::Type{Exponent{n,T}}) where {n,T} = abstract_unit(T)
+dimension(::Type{T}) where T<:Dimension = abstract_unit(T)
+
+"Convert to a UnionAll if its a parametric DataType"
 abstract_type(T::UnionAll) = T
 abstract_type(T::DataType) = length(T.parameters) == 0 ? T : T.name.wrapper
 
@@ -360,3 +379,107 @@ end
 @export rad = Radian
 
 export Length, Mass, Time, Angle, Temperature, Ratio, Exponent
+
+##
+# Experimental support for combinations
+#
+
+"Represents units like m/s and N·m"
+struct Combination{D<:Tuple{Vararg{Exponent}}} <: DerivedUnit value::Real end
+
+simplify(::Type{Combination{Tuple{T}}}) where T = simplify(T)
+simplify(::Type{C}) where C<:Combination = begin
+  p = collect(Iterators.filter(E->dimensions(E) != 0, params(C)))
+  length(p) == 0 && return Real
+  length(p) == 1 && return simplify(p[1])
+  Combination{Tuple{p...}}
+end
+# simplify(Combination{Tuple{m^2,s^0}}) == m^2
+
+dimensions(::Type{Exponent{n,T}}) where {n,T} = n
+params(::Type{Combination{T}}) where T<:Tuple = T.parameters
+
+Base.convert(::Type{Combination}, x::Exponent) = Combination{Tuple{typeof(x)}}(x.value)
+Base.convert(::Type{Combination}, x::Dimension) = Combination{Tuple{Exponent{1,typeof(x)}}}(x.value)
+# promote(1m/s, 9km/hr) == (1m/s, 2.5m/s)
+Base.promote_rule(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = begin
+  Combination{Tuple{map(promote_type, params(A), params(B))...}}
+end
+
+# conversion_factor(m²/hr, cm²/s) == 9//25
+conversion_factor(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = begin
+  pa, pb = (params(A), params(B))
+  @assert length(pa) == length(pb) "$B is not equivelent to $A"
+  foldl((value, p)->value * conversion_factor(p[1], p[2]), 1, zip(pa, pb))
+end
+
+# abbr(Combination{Tuple{m²,hr^-1}}) == "m²/hr"
+# abbr(Combination{Tuple{m²,hr^1}}) == "m²·hr"
+abbr(::Type{C}) where C<:Combination = begin
+  str = sprint(abbr_params, params(C))
+  str[chr2ind(str, 2):end]
+end
+
+abbr_params(io, params) =
+  for T ∈ params
+    d, ET = T.parameters
+    d == 0 && continue
+    print(io, d > 0 ? '·' : '/', abbr(ET))
+    d = abs(d)
+    d > 1 && print(io, exponents[d])
+  end
+
+# handle units with custom printing
+Base.show(io::IO, c::Combination) = begin
+  p = params(typeof(c))
+  first, rest = (p[1], p[2:end])
+  show(io, simplify(first)(value(c)))
+  abbr_params(io, rest)
+end
+
+# 1minute * (1m/s) == 60m
+# 3g * (1000m/kg) == 3m
+# 1000_000_000mm³ * (2.5ton/m³) == 2.5ton
+Base.:*(a::Union{Dimension,Exponent}, b::Combination) = convert(Combination, a) * b
+Base.:*(a::Combination, b::Union{Dimension,Exponent}) = convert(Combination, b) * a
+
+# Combination{Tuple{s^1}}(12) * Combination{Tuple{km^1, minute^-1}}(1) == (1//5)km
+Base.:*(a::A, b::B) where {A<:Combination, B<:Combination} = begin
+  v = value(a) * value(b)
+  T = A + B
+  short, long = sort([params(A), params(B)], by=length)
+  for EA in short
+    D = dimension(EA)
+    i = findfirst(E->dimension(E) == D, long)
+    i > 0 || continue
+    d1,T1 = EA.parameters
+    d2,T2 = long[i].parameters
+    v *= basefactor(T2)^d2/basefactor(T1)^d1
+  end
+  T(v)
+end
+
+Base.abs(::Type{Exponent{n,T}}) where {n,T} = Exponent{abs(n), T}
+
+# Combination{Tuple{s^1}} * Combination{Tuple{s^2}} == s^2
+for op in (:+, :-, :*, :/)
+  @eval Base.$op(::Type{A}, ::Type{B}) where {A<:Combination, B<:Combination} = begin
+    params_a = params(A)
+    params_b = params(B)
+    dimensions = union(map(dimension, params_a), map(dimension, params_b))
+    exprs = map(dimensions) do D
+      ia = findfirst(E->dimension(E) == D, params_a)
+      ib = findfirst(E->dimension(E) == D, params_b)
+      if ib == 0
+        params_a[ia]
+      elseif ia == 0
+        params_b[ib]
+      else
+        d1,TA = params_a[ia].parameters
+        d2,TB = params_b[ib].parameters
+        Exponent{$op(d1,d2), promote_type(TA, TB)}
+      end
+    end
+    simplify(Combination{Tuple{exprs...}})
+  end
+end
