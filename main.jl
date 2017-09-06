@@ -35,11 +35,11 @@ abstract type Temperature <: Dimension end
 
 abstract type DerivedUnit <: Unit end
 
-"Represents units like m/s"
-struct Ratio{Num<:Unit,Den<:Unit} <: DerivedUnit value::Num end
-
 "Represents units like m²"
 struct Exponent{dimensions,D<:Dimension} <: DerivedUnit value::Real end
+
+"Represents units like m/s and N·m"
+struct Combination{D<:Tuple{Vararg{Exponent}}} <: DerivedUnit value::Real end
 
 "Represents percentages like 15%"
 struct Percent <: Number value::Rational end
@@ -96,31 +96,56 @@ conversion_factor(::Type{A}, ::Type{B}) where {d1,d2,TA,TB,A<:Exponent{d1,TA},B<
   basefactor(TB)^d2/basefactor(TA)^d1
 end
 
-# conversion_factor(m/s, km/hr) == 5//18
-conversion_factor(::Type{Ratio{N2,D2}}, ::Type{Ratio{N1,D1}}) where {N1,D1,N2,D2} = begin
-  conversion_factor(N2, N1)/conversion_factor(D2, D1)
-end
-
 "Convert to the most precise type possible"
 precise(n::Number) = n
 precise(n::AbstractFloat) = rationalize(n)
 
-value(r::Ratio) = value(r.value)
 value(u::Unit) = precise(u.value)
 
 "Convert derived dimensions into plain dimensions where possible"
 simplify(::Type{Exponent{1,T}}) where T = T
 simplify(::Type{Exponent{0,T}}) where T = Real
-simplify(::Type{Ratio{T,T}}) where T = Real
-simplify(::Type{Ratio{A,B}}) where {A,B} = Ratio{simplify(A), simplify(B)}
-simplify(::Type{T}) where T<:Dimension = T
 simplify(::Type{T}) where T<:Exponent = T
+simplify(::Type{T}) where T<:Dimension = T
 
-abbr(::Type{Ratio{A,B}}) where {A,B} = string(abbr(A), '/', abbr(B))
 abbr(::Type{Exponent{n,T}}) where {n,T} = string(abbr(T), exponents[Int(n)])
+# abbr(Combination{Tuple{m²,hr^-1}}) == "m²/hr"
+# abbr(Combination{Tuple{m²,hr^1}}) == "m²·hr"
+abbr(::Type{C}) where C<:Combination = begin
+  str = sprint(abbr_params, params(C))
+  str[chr2ind(str, 2):end]
+end
 
+abbr_params(io, params) =
+  for T ∈ params
+    d, ET = T.parameters
+    d == 0 && continue
+    print(io, d > 0 ? '·' : '/', abbr(ET))
+    d = abs(d)
+    d > 1 && print(io, exponents[d])
+  end
+
+# handle units with custom printing
+Base.show(io::IO, c::Combination) = begin
+  p = params(typeof(c))
+  first, rest = (p[1], p[2:end])
+  show(io, simplify(first)(value(c)))
+  abbr_params(io, rest)
+end
+
+Base.show(io::IO, t::Unit) = begin
+  Base.print_shortest(io, Float64(t.value))
+  write(io, abbr(typeof(t)))
+end
+
+Base.abs(::Type{Exponent{n,T}}) where {n,T} = Exponent{abs(n), T}
 Base.exponent(::Type{T}) where T<:Unit = 1
-Base.exponent(::Type{Exponent{n,T}}) where {n,T} = n
+Base.exponent(::Type{E}) where E<:Exponent =
+  if E isa UnionAll
+    E.body.parameters[1]
+  else
+    E.parameters[1]
+  end
 
 """
 Get a units abstract type
@@ -131,10 +156,10 @@ abstract_unit(m) == Length
 ```
 """
 abstract_unit(::Type{Exponent{n,T}}) where {n,T} = Exponent{n,<:abstract_unit(T)}
-abstract_unit(::Type{Ratio{A,B}}) where {A,B} = Ratio{<:abstract_unit(A), <:abstract_unit(B)}
+abstract_unit(::Type{C}) where C<:Combination = Combination{Tuple{map(abstract_unit, params(C))...}}
 abstract_unit(::Type{T}) where T<:Dimension = supertype(T) == Dimension ? abstract_type(T) : supertype(T)
 # abstract_unit(m²) == Exponent{2,<:Length}
-# abstract_unit(m/s) == Ratio{<:Length,<:Time}
+# abstract_unit(m/s) == Combination{Tuple{Exponent{1,<:Length},Exponent{-1,<:Time}}}
 # abstract_unit(m) == Length
 # abstract_unit(s) == Time
 
@@ -146,22 +171,20 @@ dimension(m²) == Length
 dimension(m) == Length
 ```
 """
-dimension(::Type{Exponent{n,T}}) where {n,T} = abstract_unit(T)
 dimension(::Type{T}) where T<:Dimension = abstract_unit(T)
+dimension(::Type{T}) where T<:Exponent = begin
+  if T isa UnionAll
+    T.body.parameters[2].ub
+  else
+    abstract_unit(T.parameters[2])
+  end
+end
+# dimension(Length^1) == Length
+# dimension(Meter{0}^1) == Length
 
 "Convert to a UnionAll if its a parametric DataType"
 abstract_type(T::UnionAll) = T
 abstract_type(T::DataType) = length(T.parameters) == 0 ? T : T.name.wrapper
-
-Base.show(io::IO, t::Unit) = begin
-  Base.print_shortest(io, Float64(t.value))
-  write(io, abbr(typeof(t)))
-end
-
-Base.show(io::IO, r::Ratio{N,D}) where {N,D} = begin
-  show(io, r.value)
-  write(io, '/', abbr(D))
-end
 
 # convert(Real, 1km) == 1000
 Base.convert(::Type{N}, u::U) where {N<:Real,U<:Unit} = convert(N, u.value * basefactor(U))
@@ -190,14 +213,30 @@ Base.:-(a::T) where T<:Unit = T(-(value(a)))
 # 2m²/1m² == 2
 # 1s/5s == 0.2
 Base.:/(a::A, b::A) where A<:Unit = value(a)/value(b)
-# m/s == Ratio{m,s}
-# s/m² == Ratio{s,m^2}
-Base.:/(A::Type{<:Unit}, B::Type{<:Unit}) = simplify(Ratio{A,B})
+# m/s == Combination{Tuple{m^1,s^-1}}
+# s/m² == Combination{Tuple{s^1,m^-2}}
+# s^2/m² == Combination{Tuple{s^2,m^-2}}
+Base.:/(A::Type{<:Unit}, B::Type{<:Unit}) = simplify(Combination{Tuple{verbose(A),negate(B)}})
+Base.:/(A::Type{<:Combination}, B::Type{<:Unit}) = simplify(A + Combination{Tuple{negate(B)}})
+Base.:/(A::Type{<:Unit}, B::Type{<:Combination}) = simplify(Combination{Tuple{verbose(A)}} + B)
 
-# 1m/s == Ratio{m,s}(1)
-# 1m/s^2 == Ratio{m,s^2}(1)
-# 1m²/s^2 == Ratio{m²,s^2}(1)
-Base.:/(a::A, b::Type{B}) where {A<:Unit,B<:Unit} = Ratio{A,B}(a)
+# 1m/s == (m/s)(1)
+# 1m/s^2 == (m/s^2)(1)
+# 1m²/s^2 == (m²/s^2)(1)
+Base.:/(a::A, b::Type{B}) where {A<:Unit,B<:Unit} = (A/B)(a.value)
+
+verbose(::Type{E}) where E<:Exponent = unionall(E)
+verbose(::Type{D}) where D<:Dimension = unionall(Exponent{1,D})
+negate(::Type{D}) where D<:Dimension = unionall(Exponent{-1,D})
+negate(::Type{E}) where E<:Exponent =
+  if E isa UnionAll
+    d, var = E.body.parameters
+    UnionAll(var, Exponent{-d, var})
+  else
+    d, T = E.parameters
+    Exponent{-d, T}
+  end
+
 # 1m²/200cm² == 50 && 1m³/200cm² == 5000cm
 # (2m^4)/(2m²) == 1m²
 # (1.1s^2)/1m² == (1.1s^2)/m²
@@ -217,22 +256,18 @@ end
 Base.:/(a::Unit, b::Unit) = convert(Exponent, a) / convert(Exponent, b)
 
 # promote(1m/s, 9km/hr) == (1m/s, 2.5m/s)
-Base.promote_rule(a::Type{Ratio{NA,DA}}, b::Type{Ratio{NB,DB}}) where {NA,DA,NB,DB} =
-  Ratio{promote_type(NA,NB), promote_type(DA,DB)}
 
+unionall(E::Type{Exponent{n,T}}) where {n,T} = T isa DataType && T.abstract ? Exponent{n,<:T} : E
 # m^2 == m²
-Base.:^(::Type{U}, n::Integer) where U<:Unit = Exponent{n,U}
+Base.:^(::Type{U}, n::Integer) where U<:Unit = unionall(Exponent{n,U})
 # m²^2 == m^4
-Base.:^(::Type{Exponent{d,T}}, n::Integer) where {d,T} = Exponent{d*n,T}
+Base.:^(::Type{Exponent{d,T}}, n::Integer) where {d,T} = unionall(Exponent{d*n,T})
 # (1m²)^2 == 1m^4
 Base.:^(u::Exponent{d,T}, n::Integer) where {d,T} = Exponent{d*n,T}(value(u) ^ n)
 
-# 1m * 2m == 2m²
-Base.:*(a::Unit, b::Unit) = convert(Exponent, a) * convert(Exponent, b)
 # 5s * (1m/s) == 5m
-Base.:*(a::Unit, b::Ratio{<:Unit,B}) where B<:Unit =
-  b.value * convert(B, a).value
-Base.:*(a::Ratio, b::Unit) = b * a
+# 1m * 2m == 2m²
+Base.:*(a::Unit, b::Unit) = Combination(a) * Combination(b)
 # m * m == m² && m * cm == cm²
 Base.:*(::Type{A}, ::Type{B}) where {A<:Dimension,B<:Dimension} = Exponent{2,promote_type(A,B)}
 # m^1 * m² == m³
@@ -333,71 +368,15 @@ for λ ∈ (:<, :>, :!=, :(==))
   end
 end
 
-@eval macro $:export(e)
-  quote
-    export $(esc(e.args[1]))
-    $(esc(Expr(:const, e)))
-  end
-end
-
-@export Area = Exponent{2,<:Length}
-@export Volume = Exponent{3,<:Length}
-@export Pressure = Ratio{<:Mass,<:Area}
-@export Speed = Ratio{<:Length,<:Time}
-@export Acceleration = Ratio{<:Speed,<:Time}
-@export Jerk = Ratio{<:Acceleration,<:Time}
-
-# convert(s, 1ns) == 1e-9s
-for (factor,name) in time_factors
-  @eval @export $name = Time{$factor}
-end
-for mag in (-3, -6, -9, -12)
-  name = Symbol(get(prefix, mag, ""), 's')
-  @eval @export $name = Time{$(Rational(10)^mag)}
-end
-@export s = Time{1}
-
-# define mm, km etc...
-for mag in (3, 0, -2, -3, -6, -9)
-  name = Symbol(get(prefix, mag, ""), 'm')
-  @eval @export $name = Meter{$mag}
-  @eval @export $(Symbol(name, '²')) = Area{$name}
-  @eval @export $(Symbol(name, '³')) = Volume{$name}
-end
-@export litre = Volume{Meter{-1}}
-
-for mag in (3, 0, -3, -6, -9)
-  name = Symbol(get(prefix, mag, ""), 'g')
-  @eval @export $name = Gram{$mag}
-end
-@export ton = Gram{6}
-
-@export K = Kelvin
-@export °C = Celsius
-@export °F = Fahrenheit
-@export ° = Degree
-@export rad = Radian
-
-export Length, Mass, Time, Angle, Temperature, Ratio, Exponent
-
-##
-# Experimental support for combinations
-#
-
-"Represents units like m/s and N·m"
-struct Combination{D<:Tuple{Vararg{Exponent}}} <: DerivedUnit value::Real end
-
+params(::Type{Combination{T}}) where T<:Tuple = T.parameters
 simplify(::Type{Combination{Tuple{T}}}) where T = simplify(T)
 simplify(::Type{C}) where C<:Combination = begin
-  p = collect(Iterators.filter(E->dimensions(E) != 0, params(C)))
+  p = collect(Iterators.filter(E->exponent(E) != 0, params(C)))
   length(p) == 0 && return Real
   length(p) == 1 && return simplify(p[1])
   Combination{Tuple{p...}}
 end
 # simplify(Combination{Tuple{m^2,s^0}}) == m^2
-
-dimensions(::Type{Exponent{n,T}}) where {n,T} = n
-params(::Type{Combination{T}}) where T<:Tuple = T.parameters
 
 Base.convert(::Type{Combination}, x::Exponent) = Combination{Tuple{typeof(x)}}(x.value)
 Base.convert(::Type{Combination}, x::Dimension) = Combination{Tuple{Exponent{1,typeof(x)}}}(x.value)
@@ -413,36 +392,11 @@ conversion_factor(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = 
   foldl((value, p)->value * conversion_factor(p[1], p[2]), 1, zip(pa, pb))
 end
 
-# abbr(Combination{Tuple{m²,hr^-1}}) == "m²/hr"
-# abbr(Combination{Tuple{m²,hr^1}}) == "m²·hr"
-abbr(::Type{C}) where C<:Combination = begin
-  str = sprint(abbr_params, params(C))
-  str[chr2ind(str, 2):end]
-end
-
-abbr_params(io, params) =
-  for T ∈ params
-    d, ET = T.parameters
-    d == 0 && continue
-    print(io, d > 0 ? '·' : '/', abbr(ET))
-    d = abs(d)
-    d > 1 && print(io, exponents[d])
-  end
-
-# handle units with custom printing
-Base.show(io::IO, c::Combination) = begin
-  p = params(typeof(c))
-  first, rest = (p[1], p[2:end])
-  show(io, simplify(first)(value(c)))
-  abbr_params(io, rest)
-end
-
+Base.:*(a::Union{Dimension,Exponent}, b::Combination) = convert(Combination, a) * b
+Base.:*(a::Combination, b::Union{Dimension,Exponent}) = convert(Combination, b) * a
 # 1minute * (1m/s) == 60m
 # 3g * (1000m/kg) == 3m
 # 1000_000_000mm³ * (2.5ton/m³) == 2.5ton
-Base.:*(a::Union{Dimension,Exponent}, b::Combination) = convert(Combination, a) * b
-Base.:*(a::Combination, b::Union{Dimension,Exponent}) = convert(Combination, b) * a
-
 # Combination{Tuple{s^1}}(12) * Combination{Tuple{km^1, minute^-1}}(1) == (1//5)km
 Base.:*(a::A, b::B) where {A<:Combination, B<:Combination} = begin
   v = value(a) * value(b)
@@ -454,12 +408,10 @@ Base.:*(a::A, b::B) where {A<:Combination, B<:Combination} = begin
     i > 0 || continue
     d1,T1 = EA.parameters
     d2,T2 = long[i].parameters
-    v *= basefactor(T2)^d2/basefactor(T1)^d1
+    v *= basefactor(T1)^abs(d1)/basefactor(T2)^abs(d2)
   end
   T(v)
 end
-
-Base.abs(::Type{Exponent{n,T}}) where {n,T} = Exponent{abs(n), T}
 
 # Combination{Tuple{s^1}} * Combination{Tuple{s^2}} == s^2
 for op in (:+, :-, :*, :/)
@@ -483,3 +435,50 @@ for op in (:+, :-, :*, :/)
     simplify(Combination{Tuple{exprs...}})
   end
 end
+
+@eval macro $:export(e)
+  quote
+    export $(esc(e.args[1]))
+    $(esc(Expr(:const, e)))
+  end
+end
+
+@export Area = Length^2
+@export Volume = Length^3
+@export Pressure = Mass/Area
+@export Speed = Length/Time
+@export Acceleration = Speed/Time
+@export Jerk = Acceleration/Time
+
+# convert(s, 1ns) == 1e-9s
+for (factor,name) in time_factors
+  @eval @export $name = Time{$factor}
+end
+for mag in (-3, -6, -9, -12)
+  name = Symbol(get(prefix, mag, ""), 's')
+  @eval @export $name = Time{$(Rational(10)^mag)}
+end
+@export s = Time{1//1}
+
+# define mm, km etc...
+for mag in (3, 0, -2, -3, -6, -9)
+  name = Symbol(get(prefix, mag, ""), 'm')
+  @eval @export $name = Meter{$mag}
+  @eval @export $(Symbol(name, '²')) = Area{$name}
+  @eval @export $(Symbol(name, '³')) = Volume{$name}
+end
+@export litre = Volume{Meter{-1}}
+
+for mag in (3, 0, -3, -6, -9)
+  name = Symbol(get(prefix, mag, ""), 'g')
+  @eval @export $name = Gram{$mag}
+end
+@export ton = Gram{6}
+
+@export K = Kelvin
+@export °C = Celsius
+@export °F = Fahrenheit
+@export ° = Degree
+@export rad = Radian
+
+export Length, Mass, Time, Angle, Temperature

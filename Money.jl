@@ -16,6 +16,6 @@ abbr(::Type{Dollar{c}}) where c = string(c)
 basefactor(::Type{Dollar{abbr}}) where abbr = rates[abbr]
 Base.promote_rule(::Type{<:Dollar}, ::Type{<:Dollar}) = Dollar{:USD}
 
-const Wage = Ratio{<:Money,<:Time}
+const Wage = Money/Time
 const USD = Dollar{:USD}
 const NZD = Dollar{:NZD}
