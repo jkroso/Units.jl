@@ -454,6 +454,7 @@ for mag in (3, 0, -2, -3, -6, -9)
   @eval @export $(Symbol(name, '³')) = Volume{$name}
 end
 @export litre = Volume{Meter{-1}}
+@export hectare = Area{Meter{2}}
 
 for mag in (3, 0, -3, -6, -9)
   name = Symbol(get(prefix, mag, ""), 'g')
