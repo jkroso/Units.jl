@@ -265,9 +265,6 @@ Base.:^(::Type{Exponent{d,T}}, n::Integer) where {d,T} = unionall(Exponent{d*n,T
 # (1m²)^2 == 1m^4
 Base.:^(u::Exponent{d,T}, n::Integer) where {d,T} = Exponent{d*n,T}(value(u) ^ n)
 
-# 5s * (1m/s) == 5m
-# 1m * 2m == 2m²
-Base.:*(a::Unit, b::Unit) = Combination(a) * Combination(b)
 # m * m == m² && m * cm == cm²
 Base.:*(::Type{A}, ::Type{B}) where {A<:Dimension,B<:Dimension} = Exponent{2,promote_type(A,B)}
 # m^1 * m² == m³
@@ -276,14 +273,6 @@ Base.:*(::Type{Exponent{da,T}}, ::Type{Exponent{db,T}}) where {da,db,T<:Unit} = 
 Base.:*(::Type{A}, ::Type{B}) where {A<:Dimension,B<:Exponent} = Exponent{1,A} * B
 Base.:*(::Type{B}, ::Type{A}) where {A<:Dimension,B<:Exponent} = Exponent{1,A} * B
 # 1m² * 2m² == 2m^4
-Base.:*(a::Exponent{da,T}, b::Exponent{db,T}) where {da,db,T} = Exponent{da+db,T}(value(a) * value(b))
-# 1mm² * 2cm^1 == 20mm³
-Base.:*(a::Exponent{da,TA}, b::Exponent{db,TB}) where {da,db,TA,TB} = begin
-  T = promote_type(TA, TB)
-  av = value(convert(Exponent{da,T}, a))
-  bv = value(convert(Exponent{db,T}, b))
-  Exponent{da + db, T}(av * bv)
-end
 
 Base.convert(::Type{Exponent}, d::Dimension) = Exponent{1,typeof(d)}(d.value)
 Base.convert(::Type{Exponent}, u::Exponent) = u
@@ -369,6 +358,9 @@ for λ ∈ (:<, :>, :!=, :(==))
 end
 
 params(::Type{Combination{T}}) where T<:Tuple = T.parameters
+params(::Type{E}) where E<:Exponent = Core.svec(E)
+params(::Type{D}) where D<:Dimension = Core.svec(Exponent{1,D})
+
 simplify(::Type{Combination{Tuple{T}}}) where T = simplify(T)
 simplify(::Type{C}) where C<:Combination = begin
   p = collect(Iterators.filter(E->exponent(E) != 0, params(C)))
@@ -392,25 +384,34 @@ conversion_factor(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = 
   foldl((value, p)->value * conversion_factor(p[1], p[2]), 1, zip(pa, pb))
 end
 
+Base.:*(a::Unit, b::Unit) = Combination(a) * Combination(b)
 Base.:*(a::Union{Dimension,Exponent}, b::Combination) = convert(Combination, a) * b
-Base.:*(a::Combination, b::Union{Dimension,Exponent}) = convert(Combination, b) * a
+Base.:*(a::Combination, b::Union{Dimension,Exponent}) = a * convert(Combination, b)
+# 5s * (1m/s) == 5m
+# 1m * 2m == 2m²
 # 1minute * (1m/s) == 60m
 # 3g * (1000m/kg) == 3m
 # 1000_000_000mm³ * (2.5ton/m³) == 2.5ton
 # Combination{Tuple{s^1}}(12) * Combination{Tuple{km^1, minute^-1}}(1) == (1//5)km
+# 1mm² * 2cm^1 == 20mm³
 Base.:*(a::A, b::B) where {A<:Combination, B<:Combination} = begin
-  v = value(a) * value(b)
   T = A + B
-  short, long = sort([params(A), params(B)], by=length)
-  for EA in short
+  params_a, params_b = params(A), params(B)
+  factor = 1
+  for i in 1:min(length(params_a), length(params_b))
+    EA = params_a[i]
     D = dimension(EA)
-    i = findfirst(E->dimension(E) == D, long)
+    i = findfirst(E->dimension(E) == D, params_b)
     i > 0 || continue
+    EB = params_b[i]
     d1,T1 = EA.parameters
-    d2,T2 = long[i].parameters
-    v *= basefactor(T1)^abs(d1)/basefactor(T2)^abs(d2)
+    d2,T2 = EB.parameters
+    T0 = promote_type(T1, T2)
+    ba = basefactor(EA)/basefactor(Exponent{d1,T0})
+    bb = basefactor(EB)/basefactor(Exponent{d2,T0})
+    factor *= ba * bb
   end
-  T(v)
+  T((value(a) * value(b)) * factor)
 end
 
 # Combination{Tuple{s^1}} * Combination{Tuple{s^2}} == s^2
