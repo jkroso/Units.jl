@@ -1,12 +1,12 @@
 @require "github.com/jkroso/Request.jl" GET
-@require "." abbr basefactor Dimension exports...
+@require "." abbr basefactor BaseUnit exports...
 
 const rates = let
   data = parse(GET("http://api.fixer.io/latest?base=USD"))["rates"]
   Dict{Symbol,Rational}((Symbol(k)=>1/rationalize(v) for (k,v) ∈ data)..., :USD=>1)
 end
 
-abstract type Money <: Dimension end
+abstract type Money <: BaseUnit end
 struct Dollar{nation} <: Money value::Real end
 
 # sprint(show, 1NZD) == "1.00 NZD"

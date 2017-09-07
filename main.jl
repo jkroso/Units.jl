@@ -25,18 +25,18 @@ const exponents = Vector{Char}("¹²³⁴⁵⁶⁷⁸⁹")
 "Units are meaningful numbers"
 abstract type Unit <: Number end
 
-"Dimensions are the base units which others are derived from"
-abstract type Dimension <: Unit end
+"Base units are the primitive types all others are derived from"
+abstract type BaseUnit <: Unit end
 
-abstract type Length <: Dimension end
-abstract type Mass <: Dimension end
-abstract type Angle <: Dimension end
-abstract type Temperature <: Dimension end
+abstract type Length <: BaseUnit end
+abstract type Mass <: BaseUnit end
+abstract type Angle <: BaseUnit end
+abstract type Temperature <: BaseUnit end
 
 abstract type DerivedUnit <: Unit end
 
 "Represents units like m²"
-struct Exponent{dimensions,D<:Dimension} <: DerivedUnit value::Real end
+struct Exponent{dimensions,D<:BaseUnit} <: DerivedUnit value::Real end
 
 "Represents units like m/s and N·m"
 struct Combination{D<:Tuple{Vararg{Exponent}}} <: DerivedUnit value::Real end
@@ -59,12 +59,12 @@ Returns the shorthand notation for a given unit type
 function abbr end
 
 """
-Get the magnitude of a Dimension
+Get the magnitude of a BaseUnit
 
 `magnitude(m) = 0`
 `magnitude(km) = 3`
 """
-magnitude(::Type{<:Dimension}) = 1
+magnitude(::Type{<:BaseUnit}) = 1
 
 """
 Compute the factor required to convert a Unit of any magnitude
@@ -73,25 +73,25 @@ to one with a magnitude of 1
 `basefactor(km) == 1000`
 `basefactor(m) == 1`
 """
-basefactor(::Type{T}) where T<:Dimension = Rational(10)^magnitude(T) # Rational allows 10^-1
+basefactor(::Type{T}) where T<:BaseUnit = Rational(10)^magnitude(T) # Rational allows 10^-1
 basefactor(::Type{Exponent{d,D}}) where {d,D} = basefactor(D)^d
 
 """
-Like basefactor but for instead of comparing with the base type it
+Like basefactor but instead of comparing with the base type it
 compares with a specific type
 """
 function conversion_factor end
 
 # conversion_factor(m³, mm³) == 1//1000_000_000
-conversion_factor(::Type{A}, ::Type{B}) where {A<:Dimension,B<:Dimension} = begin
-  @assert typejoin(A, B) != Dimension "can't convert $B to $A"
+conversion_factor(::Type{A}, ::Type{B}) where {A<:BaseUnit,B<:BaseUnit} = begin
+  @assert typejoin(A, B) != BaseUnit "can't convert $B to $A"
   basefactor(B)/basefactor(A)
 end
 # conversion_factor(m^2,cm^2) == 1//10_000
 # conversion_factor(hr^-1,s^-1) == 3600//1
 conversion_factor(::Type{A}, ::Type{B}) where {d1,d2,TA,TB,A<:Exponent{d1,TA},B<:Exponent{d2,TB}} = begin
-  @assert typejoin(TA, TB) != Dimension "can't convert $TB to $TA"
-  @assert d1 == d2 "$A needs to have the same dimension count as $B"
+  @assert typejoin(TA, TB) != BaseUnit "can't convert $TB to $TA"
+  @assert d1 == d2 "$A needs to have the same exponent count as $B"
   basefactor(TB)^d2/basefactor(TA)^d1
 end
 # conversion_factor(m²/hr, cm²/s) == 9//25
@@ -111,7 +111,7 @@ value(u::Unit) = precise(u.value)
 simplify(::Type{Exponent{1,T}}) where T = T
 simplify(::Type{Exponent{0,T}}) where T = Real
 simplify(::Type{T}) where T<:Exponent = T
-simplify(::Type{T}) where T<:Dimension = T
+simplify(::Type{T}) where T<:BaseUnit = T
 
 abbr(::Type{Exponent{n,T}}) where {n,T} = string(abbr(T), exponents[Int(n)])
 # abbr(Combination{Tuple{m²,hr^-1}}) == "m²/hr"
@@ -162,30 +162,31 @@ abstract_unit(m) == Length
 """
 abstract_unit(::Type{Exponent{n,T}}) where {n,T} = Exponent{n,<:abstract_unit(T)}
 abstract_unit(::Type{C}) where C<:Combination = Combination{Tuple{map(abstract_unit, params(C))...}}
-abstract_unit(::Type{T}) where T<:Dimension = supertype(T) == Dimension ? abstract_type(T) : supertype(T)
+abstract_unit(::Type{T}) where T<:BaseUnit =
+  supertype(T) == BaseUnit ? abstract_type(T) : abstract_unit(supertype(T))
 # abstract_unit(m²) == Exponent{2,<:Length}
 # abstract_unit(m/s) == Combination{Tuple{Exponent{1,<:Length},Exponent{-1,<:Time}}}
 # abstract_unit(m) == Length
 # abstract_unit(s) == Time
 
 """
-Find the abstract type a unit was derived from
+Find the BaseUnit a unit was derived from
 
 ```julia
-dimension(m²) == Length
-dimension(m) == Length
+baseunit(m²) == Length
+baseunit(m) == Length
 ```
 """
-dimension(::Type{T}) where T<:Dimension = abstract_unit(T)
-dimension(::Type{T}) where T<:Exponent = begin
+baseunit(::Type{T}) where T<:BaseUnit = abstract_unit(T)
+baseunit(::Type{T}) where T<:Exponent = begin
   if T isa UnionAll
     T.body.parameters[2].ub
   else
     abstract_unit(T.parameters[2])
   end
 end
-# dimension(Length^1) == Length
-# dimension(Meter{0}^1) == Length
+# baseunit(Length^1) == Length
+# baseunit(Meter{0}^1) == Length
 
 "Convert to a UnionAll if its a parametric DataType"
 abstract_type(T::UnionAll) = T
@@ -228,8 +229,8 @@ Base.:/(A::Type{<:Unit}, B::Type{<:Combination}) = simplify(Combination{Tuple{ve
 Base.:/(a::A, b::Type{B}) where {A<:Unit,B<:Unit} = (A/B)(a.value)
 
 verbose(::Type{E}) where E<:Exponent = unionall(E)
-verbose(::Type{D}) where D<:Dimension = unionall(Exponent{1,D})
-negate(::Type{D}) where D<:Dimension = unionall(Exponent{-1,D})
+verbose(::Type{D}) where D<:BaseUnit = unionall(Exponent{1,D})
+negate(::Type{D}) where D<:BaseUnit = unionall(Exponent{-1,D})
 negate(::Type{E}) where E<:Exponent =
   if E isa UnionAll
     d, var = E.body.parameters
@@ -248,15 +249,15 @@ Base.:^(::Type{Exponent{d,T}}, n::Integer) where {d,T} = unionall(Exponent{d*n,T
 Base.:^(u::Exponent{d,T}, n::Integer) where {d,T} = Exponent{d*n,T}(value(u) ^ n)
 
 # m * m == m² && m * cm == cm²
-Base.:*(::Type{A}, ::Type{B}) where {A<:Dimension,B<:Dimension} = Exponent{2,promote_type(A,B)}
+Base.:*(::Type{A}, ::Type{B}) where {A<:BaseUnit,B<:BaseUnit} = Exponent{2,promote_type(A,B)}
 # m^1 * m² == m³
 Base.:*(::Type{Exponent{da,T}}, ::Type{Exponent{db,T}}) where {da,db,T<:Unit} = Exponent{da+db,T}
 # m * m² == m³
-Base.:*(::Type{A}, ::Type{B}) where {A<:Dimension,B<:Exponent} = Exponent{1,A} * B
-Base.:*(::Type{B}, ::Type{A}) where {A<:Dimension,B<:Exponent} = Exponent{1,A} * B
+Base.:*(::Type{A}, ::Type{B}) where {A<:BaseUnit,B<:Exponent} = Exponent{1,A} * B
+Base.:*(::Type{B}, ::Type{A}) where {A<:BaseUnit,B<:Exponent} = Exponent{1,A} * B
 # 1m² * 2m² == 2m^4
 
-Base.convert(::Type{Exponent}, d::Dimension) = Exponent{1,typeof(d)}(d.value)
+Base.convert(::Type{Exponent}, d::BaseUnit) = Exponent{1,typeof(d)}(d.value)
 Base.convert(::Type{Exponent}, u::Exponent) = u
 
 # convert(m³, 1000_000_000mm³) == 1m³
@@ -277,7 +278,7 @@ magnitude(::Type{Meter{m}}) where m = m
 Base.promote_rule(::Type{Meter{m1}},::Type{Meter{m2}}) where {m1,m2} = Meter{min(m1,m2)}
 # promote(1mm, 2m) == (1mm, 2000mm)
 
-struct Time{factor} <: Dimension value::Real end
+struct Time{factor} <: BaseUnit value::Real end
 
 const time_factors = Dict{Rational,Symbol}(60 => :minute,
                                            3600 => :hr,
@@ -341,7 +342,7 @@ end
 
 params(::Type{Combination{T}}) where T<:Tuple = T.parameters
 params(::Type{E}) where E<:Exponent = Core.svec(E)
-params(::Type{D}) where D<:Dimension = Core.svec(Exponent{1,D})
+params(::Type{D}) where D<:BaseUnit = Core.svec(Exponent{1,D})
 # simplify(Combination{Tuple{m^2,s^0}}) == m^2
 simplify(::Type{Combination{Tuple{T}}}) where T = simplify(T)
 simplify(::Type{C}) where C<:Combination = begin
@@ -352,7 +353,7 @@ simplify(::Type{C}) where C<:Combination = begin
 end
 
 Base.convert(::Type{Combination}, x::Exponent) = Combination{Tuple{typeof(x)}}(x.value)
-Base.convert(::Type{Combination}, x::Dimension) = Combination{Tuple{Exponent{1,typeof(x)}}}(x.value)
+Base.convert(::Type{Combination}, x::BaseUnit) = Combination{Tuple{Exponent{1,typeof(x)}}}(x.value)
 # promote(1m/s, 9km/hr) == (1m/s, 2.5m/s)
 Base.promote_rule(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = begin
   Combination{Tuple{map(promote_type, params(A), params(B))...}}
@@ -366,8 +367,8 @@ for op in (:*, :/)
     short, long = sort([params(A), params(B)], by=length)
     factor = 1
     for EA in short
-      D = dimension(EA)
-      i = findfirst(E->dimension(E) == D, long)
+      D = baseunit(EA)
+      i = findfirst(E->baseunit(E) == D, long)
       i > 0 || continue
       EB = long[i]
       d1,T1 = EA.parameters
@@ -403,10 +404,10 @@ for op in (:+, :-, :*, :/)
   @eval Base.$op(::Type{A}, ::Type{B}) where {A<:Combination, B<:Combination} = begin
     params_a = params(A)
     params_b = params(B)
-    dimensions = union(map(dimension, params_a), map(dimension, params_b))
+    dimensions = union(map(baseunit, params_a), map(baseunit, params_b))
     exprs = map(dimensions) do D
-      ia = findfirst(E->dimension(E) == D, params_a)
-      ib = findfirst(E->dimension(E) == D, params_b)
+      ia = findfirst(E->baseunit(E) == D, params_a)
+      ib = findfirst(E->baseunit(E) == D, params_b)
       if ib == 0
         params_a[ia]
       elseif ia == 0
