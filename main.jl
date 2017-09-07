@@ -87,13 +87,18 @@ conversion_factor(::Type{A}, ::Type{B}) where {A<:Dimension,B<:Dimension} = begi
   @assert typejoin(A, B) != Dimension "can't convert $B to $A"
   basefactor(B)/basefactor(A)
 end
-
 # conversion_factor(m^2,cm^2) == 1//10_000
 # conversion_factor(hr^-1,s^-1) == 3600//1
 conversion_factor(::Type{A}, ::Type{B}) where {d1,d2,TA,TB,A<:Exponent{d1,TA},B<:Exponent{d2,TB}} = begin
   @assert typejoin(TA, TB) != Dimension "can't convert $TB to $TA"
   @assert d1 == d2 "$A needs to have the same dimension count as $B"
   basefactor(TB)^d2/basefactor(TA)^d1
+end
+# conversion_factor(m²/hr, cm²/s) == 9//25
+conversion_factor(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = begin
+  pa, pb = (params(A), params(B))
+  @assert length(pa) == length(pb) "$B is not equivelent to $A"
+  foldl((value, p)->value * conversion_factor(p[1], p[2]), 1, zip(pa, pb))
 end
 
 "Convert to the most precise type possible"
@@ -233,8 +238,8 @@ negate(::Type{E}) where E<:Exponent =
     d, T = E.parameters
     Exponent{-d, T}
   end
-
 unionall(E::Type{Exponent{n,T}}) where {n,T} = T isa DataType && T.abstract ? Exponent{n,<:T} : E
+
 # m^2 == m²
 Base.:^(::Type{U}, n::Integer) where U<:Unit = unionall(Exponent{n,U})
 # m²^2 == m^4
@@ -351,13 +356,6 @@ Base.convert(::Type{Combination}, x::Dimension) = Combination{Tuple{Exponent{1,t
 # promote(1m/s, 9km/hr) == (1m/s, 2.5m/s)
 Base.promote_rule(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = begin
   Combination{Tuple{map(promote_type, params(A), params(B))...}}
-end
-
-# conversion_factor(m²/hr, cm²/s) == 9//25
-conversion_factor(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = begin
-  pa, pb = (params(A), params(B))
-  @assert length(pa) == length(pb) "$B is not equivelent to $A"
-  foldl((value, p)->value * conversion_factor(p[1], p[2]), 1, zip(pa, pb))
 end
 
 for op in (:*, :/)
