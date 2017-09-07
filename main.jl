@@ -210,9 +210,6 @@ end
 # -(1m) == -1m
 Base.:-(a::T) where T<:Unit = T(-(value(a)))
 
-# 2m²/1m² == 2
-# 1s/5s == 0.2
-Base.:/(a::A, b::A) where A<:Unit = value(a)/value(b)
 # m/s == Combination{Tuple{m^1,s^-1}}
 # s/m² == Combination{Tuple{s^1,m^-2}}
 # s^2/m² == Combination{Tuple{s^2,m^-2}}
@@ -236,26 +233,6 @@ negate(::Type{E}) where E<:Exponent =
     d, T = E.parameters
     Exponent{-d, T}
   end
-
-# 1m²/200cm² == 50 && 1m³/200cm² == 5000cm
-# (2m^4)/(2m²) == 1m²
-# (1.1s^2)/1m² == (1.1s^2)/m²
-Base.:/(a::Exponent{da,TA}, b::Exponent{db,TB}) where {da,db,TA<:Dimension,TB<:Dimension} = begin
-  if typejoin(TA, TB) == Dimension # different dimensions
-    (typeof(a)/typeof(b))(value(a)/value(b))
-  else
-    T = promote_type(TA, TB)
-    av = value(convert(Exponent{da,T}, a))
-    bv = value(convert(Exponent{db,T}, b))
-    simplify(Exponent{da-db,T})(av/bv)
-  end
-end
-# 1m/5s == 0.2m/s
-# 1.1s/1m² == 1.1s/m²
-# (1.1s^2)/1m == 1.1s^2/m && 1m²/2m == 0.5m
-Base.:/(a::Unit, b::Unit) = convert(Exponent, a) / convert(Exponent, b)
-
-# promote(1m/s, 9km/hr) == (1m/s, 2.5m/s)
 
 unionall(E::Type{Exponent{n,T}}) where {n,T} = T isa DataType && T.abstract ? Exponent{n,<:T} : E
 # m^2 == m²
@@ -360,7 +337,7 @@ end
 params(::Type{Combination{T}}) where T<:Tuple = T.parameters
 params(::Type{E}) where E<:Exponent = Core.svec(E)
 params(::Type{D}) where D<:Dimension = Core.svec(Exponent{1,D})
-
+# simplify(Combination{Tuple{m^2,s^0}}) == m^2
 simplify(::Type{Combination{Tuple{T}}}) where T = simplify(T)
 simplify(::Type{C}) where C<:Combination = begin
   p = collect(Iterators.filter(E->exponent(E) != 0, params(C)))
@@ -368,7 +345,6 @@ simplify(::Type{C}) where C<:Combination = begin
   length(p) == 1 && return simplify(p[1])
   Combination{Tuple{p...}}
 end
-# simplify(Combination{Tuple{m^2,s^0}}) == m^2
 
 Base.convert(::Type{Combination}, x::Exponent) = Combination{Tuple{typeof(x)}}(x.value)
 Base.convert(::Type{Combination}, x::Dimension) = Combination{Tuple{Exponent{1,typeof(x)}}}(x.value)
@@ -384,9 +360,30 @@ conversion_factor(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = 
   foldl((value, p)->value * conversion_factor(p[1], p[2]), 1, zip(pa, pb))
 end
 
-Base.:*(a::Unit, b::Unit) = Combination(a) * Combination(b)
-Base.:*(a::Union{Dimension,Exponent}, b::Combination) = convert(Combination, a) * b
-Base.:*(a::Combination, b::Union{Dimension,Exponent}) = a * convert(Combination, b)
+for op in (:*, :/)
+  @eval Base.$op(a::Unit, b::Unit) = $op(Combination(a), Combination(b))
+  @eval Base.$op(a::Unit, b::Combination) = $op(Combination(a), b)
+  @eval Base.$op(a::Combination, b::Unit) = $op(a, Combination(b))
+  @eval Base.$op(a::A, b::B) where {A<:Combination, B<:Combination} = begin
+    T = $(op == :* ? :+ : :-)(A, B)
+    params_a, params_b = params(A), params(B)
+    factor = 1
+    for i in 1:min(length(params_a), length(params_b))
+      EA = params_a[i]
+      D = dimension(EA)
+      i = findfirst(E->dimension(E) == D, params_b)
+      i > 0 || continue
+      EB = params_b[i]
+      d1,T1 = EA.parameters
+      d2,T2 = EB.parameters
+      T0 = promote_type(T1, T2)
+      ba = basefactor(EA)/basefactor(Exponent{d1,T0})
+      bb = basefactor(EB)/basefactor(Exponent{d2,T0})
+      factor *= ba * bb
+    end
+    T($op(value(a), value(b)) * factor)
+  end
+end
 # 5s * (1m/s) == 5m
 # 1m * 2m == 2m²
 # 1minute * (1m/s) == 60m
@@ -394,27 +391,17 @@ Base.:*(a::Combination, b::Union{Dimension,Exponent}) = a * convert(Combination,
 # 1000_000_000mm³ * (2.5ton/m³) == 2.5ton
 # Combination{Tuple{s^1}}(12) * Combination{Tuple{km^1, minute^-1}}(1) == (1//5)km
 # 1mm² * 2cm^1 == 20mm³
-Base.:*(a::A, b::B) where {A<:Combination, B<:Combination} = begin
-  T = A + B
-  params_a, params_b = params(A), params(B)
-  factor = 1
-  for i in 1:min(length(params_a), length(params_b))
-    EA = params_a[i]
-    D = dimension(EA)
-    i = findfirst(E->dimension(E) == D, params_b)
-    i > 0 || continue
-    EB = params_b[i]
-    d1,T1 = EA.parameters
-    d2,T2 = EB.parameters
-    T0 = promote_type(T1, T2)
-    ba = basefactor(EA)/basefactor(Exponent{d1,T0})
-    bb = basefactor(EB)/basefactor(Exponent{d2,T0})
-    factor *= ba * bb
-  end
-  T((value(a) * value(b)) * factor)
-end
+# 2m²/1m² == 2
+# 1s/5s == 0.2
+# 1m/5s == 0.2m/s
+# 1.1s/1m² == 1.1s/m²
+# (1.1s^2)/1m == 1.1s^2/m && 1m²/2m == 0.5m
+# 1m²/200cm² == 50 && 1m³/200cm² == 5000cm
+# (2m^4)/(2m²) == 1m²
+# (1.1s^2)/1m² == (1.1s^2)/m²
 
 # Combination{Tuple{s^1}} * Combination{Tuple{s^2}} == s^2
+# Combination{Tuple{s^2}}-Combination{Tuple{m^2}} == Combination{Tuple{s^2,m^-2}}
 for op in (:+, :-, :*, :/)
   @eval Base.$op(::Type{A}, ::Type{B}) where {A<:Combination, B<:Combination} = begin
     params_a = params(A)
@@ -426,7 +413,7 @@ for op in (:+, :-, :*, :/)
       if ib == 0
         params_a[ia]
       elseif ia == 0
-        params_b[ib]
+        $(op == :- ? negate : identity)(params_b[ib])
       else
         d1,TA = params_a[ia].parameters
         d2,TB = params_b[ib].parameters
