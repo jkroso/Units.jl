@@ -357,21 +357,19 @@ Base.convert(::Type{Combination}, x::Dimension) = Combination{Tuple{Exponent{1,t
 Base.promote_rule(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = begin
   Combination{Tuple{map(promote_type, params(A), params(B))...}}
 end
-
 for op in (:*, :/)
   @eval Base.$op(a::Unit, b::Unit) = $op(Combination(a), Combination(b))
   @eval Base.$op(a::Unit, b::Combination) = $op(Combination(a), b)
   @eval Base.$op(a::Combination, b::Unit) = $op(a, Combination(b))
   @eval Base.$op(a::A, b::B) where {A<:Combination, B<:Combination} = begin
     T = $(op == :* ? :+ : :-)(A, B)
-    params_a, params_b = params(A), params(B)
+    short, long = sort([params(A), params(B)], by=length)
     factor = 1
-    for i in 1:min(length(params_a), length(params_b))
-      EA = params_a[i]
+    for EA in short
       D = dimension(EA)
-      i = findfirst(E->dimension(E) == D, params_b)
+      i = findfirst(E->dimension(E) == D, long)
       i > 0 || continue
-      EB = params_b[i]
+      EB = long[i]
       d1,T1 = EA.parameters
       d2,T2 = EB.parameters
       T0 = promote_type(T1, T2)
@@ -397,6 +395,7 @@ end
 # 1m²/200cm² == 50 && 1m³/200cm² == 5000cm
 # (2m^4)/(2m²) == 1m²
 # (1.1s^2)/1m² == (1.1s^2)/m²
+# 1kg/m * 1cm == 0.01kg
 
 # Combination{Tuple{s^1}} * Combination{Tuple{s^2}} == s^2
 # Combination{Tuple{s^2}}-Combination{Tuple{m^2}} == Combination{Tuple{s^2,m^-2}}
