@@ -283,7 +283,9 @@ struct Time{factor} <: BaseUnit value::Real end
 const time_factors = Dict{Rational,Symbol}(60 => :minute,
                                            3600 => :hr,
                                            86400 => :day,
-                                           604800 => :week)
+                                           604800 => :week,
+                                           2629746 => :month,
+                                           31556952 => :year)
 # abbr(Time{-1000_000_000_000//1}) == "ps"
 abbr(::Type{Time{f}}) where f =
   String(get(time_factors, f, string(get(prefix, -round(Int, log(10, abs(f))), ""), 's')))
