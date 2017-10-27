@@ -46,6 +46,8 @@ struct Percent <: Number value::Rational end
 Percent(n::AbstractFloat) = Percent(rationalize(n))
 Base.:-(a::Number, p::Percent) = a/(1 + p.value)
 Base.:+(a::Number, p::Percent) = a*(1 + p.value)
+Base.:*(a::Number, p::Percent) = a * p.value
+Base.:/(a::Number, p::Percent) = a / p.value
 (p::Percent)(n::Number) = n * p.value
 (p::Percent)(n::Real) = precise(n) * p.value
 Base.show(io::IO, p::Percent) = begin
