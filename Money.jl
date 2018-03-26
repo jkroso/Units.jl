@@ -17,5 +17,7 @@ basefactor(::Type{Dollar{abbr}}) where abbr = rates[abbr]
 Base.promote_rule(::Type{<:Dollar}, ::Type{<:Dollar}) = Dollar{:USD}
 
 const Wage = Money/Time
-const USD = Dollar{:USD}
-const NZD = Dollar{:NZD}
+
+for sym in [:USD :NZD :AUD :JPY :EUR :GBP :CNY]
+  @eval const $sym = Dollar{$(QuoteNode(sym))}
+end
