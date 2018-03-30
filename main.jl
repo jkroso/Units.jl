@@ -42,18 +42,19 @@ struct Exponent{dimensions,D<:BaseUnit} <: DerivedUnit value::Real end
 struct Combination{D<:Tuple{Vararg{Exponent}}} <: DerivedUnit value::Real end
 
 "Represents percentages like 15%"
-struct Percent <: Number value::Rational end
+struct Percent <: Real value::Rational end
 Percent(n::AbstractFloat) = Percent(rationalize(n))
-Base.:-(a::Number, p::Percent) = a/(1 + p.value)
-Base.:+(a::Number, p::Percent) = a*(1 + p.value)
-Base.:*(a::Number, p::Percent) = a * p.value
-Base.:/(a::Number, p::Percent) = a / p.value
-(p::Percent)(n::Number) = n * p.value
+Base.:-(a::Real, p::Percent) = a/(1 + p.value)
+Base.:+(a::Real, p::Percent) = a*(1 + p.value)
+Base.:*(a::Real, p::Percent) = a * p.value
+Base.:/(a::Real, p::Percent) = a / p.value
 (p::Percent)(n::Real) = precise(n) * p.value
 Base.show(io::IO, p::Percent) = begin
   Base.print_shortest(io, Float64(p.value*100))
   write(io, '%')
+  nothing
 end
+Base.convert(::Type{T}, p::Percent) where T <: Real = p isa T ? p : convert(T, p.value)
 
 """
 Returns the shorthand notation for a given unit type
@@ -115,7 +116,13 @@ simplify(::Type{Exponent{0,T}}) where T = Real
 simplify(::Type{T}) where T<:Exponent = T
 simplify(::Type{T}) where T<:BaseUnit = T
 
-abbr(::Type{Exponent{n,T}}) where {n,T} = string(abbr(T), exponents[Int(n)])
+abbr(::Type{Exponent{n,T}}) where {n,T} = begin
+  n == 1 && return abbr(T)
+  n == 0 && return string(abbr(T), '⁰')
+  n > 1 && return string(abbr(T), exponents[Int(n)])
+  string(abbr(T), '⁻', exponents[Int(abs(n))])
+end
+
 # abbr(Combination{Tuple{m²,hr^-1}}) == "m²/hr"
 # abbr(Combination{Tuple{m²,hr^1}}) == "m²·hr"
 abbr(::Type{C}) where C<:Combination = begin
@@ -140,9 +147,21 @@ Base.show(io::IO, c::Combination) = begin
   abbr_params(io, rest)
 end
 
+Base.show(io::IO, e::Exponent{d,U}) where {d,U} = begin
+  show(io, e.value)
+  if d < 0
+    write(io, '/', abbr(U))
+    d < -1 && write(io, exponents[Int(abs(d))])
+  else
+    write(io, abbr(U))
+    d > 1 && write(io, exponents[Int(d)])
+  end
+end
+
 Base.show(io::IO, t::Unit) = begin
-  Base.print_shortest(io, Float64(t.value))
+  Base.print_shortest(io, convert(Float64, t.value))
   write(io, abbr(typeof(t)))
+  nothing
 end
 
 Base.abs(::Type{Exponent{n,T}}) where {n,T} = Exponent{abs(n), T}
@@ -224,6 +243,9 @@ Base.:-(a::T) where T<:Unit = T(-(value(a)))
 Base.:/(A::Type{<:Unit}, B::Type{<:Unit}) = simplify(Combination{Tuple{verbose(A),negate(B)}})
 Base.:/(A::Type{<:Combination}, B::Type{<:Unit}) = simplify(A + Combination{Tuple{negate(B)}})
 Base.:/(A::Type{<:Unit}, B::Type{<:Combination}) = simplify(Combination{Tuple{verbose(A)}} + B)
+
+# 1/m == (m^-1)(1)
+Base.:/(a::Number, B::Type{<:Unit}) = simplify(Combination{Tuple{negate(B)}})(a)
 
 # 1m/s == (m/s)(1)
 # 1m/s^2 == (m/s^2)(1)
