@@ -237,13 +237,6 @@ end
 # -(1m) == -1m
 Base.:-(a::T) where T<:Unit = T(-(value(a)))
 
-# m/s == Combination{Tuple{m^1,s^-1}}
-# s/m² == Combination{Tuple{s^1,m^-2}}
-# s^2/m² == Combination{Tuple{s^2,m^-2}}
-Base.:/(A::Type{<:Unit}, B::Type{<:Unit}) = simplify(Combination{Tuple{verbose(A),negate(B)}})
-Base.:/(A::Type{<:Combination}, B::Type{<:Unit}) = simplify(A + Combination{Tuple{negate(B)}})
-Base.:/(A::Type{<:Unit}, B::Type{<:Combination}) = simplify(Combination{Tuple{verbose(A)}} + B)
-
 # 1/m == (m^-1)(1)
 Base.:/(a::Number, B::Type{<:Unit}) = simplify(Combination{Tuple{negate(B)}})(a)
 
@@ -252,8 +245,10 @@ Base.:/(a::Number, B::Type{<:Unit}) = simplify(Combination{Tuple{negate(B)}})(a)
 # 1m²/s^2 == (m²/s^2)(1)
 Base.:/(a::A, b::Type{B}) where {A<:Unit,B<:Unit} = (A/B)(a.value)
 
-verbose(::Type{E}) where E<:Exponent = unionall(E)
-verbose(::Type{D}) where D<:BaseUnit = unionall(Exponent{1,D})
+toexponent(::Type{E}) where E<:Exponent = unionall(E)
+toexponent(::Type{D}) where D<:BaseUnit = unionall(Exponent{1,D})
+tocombination(::Type{A}) where A<:Combination = A
+tocombination(::Type{A}) where A<:Unit = Combination{Tuple{toexponent(A)}}
 negate(::Type{D}) where D<:BaseUnit = unionall(Exponent{-1,D})
 negate(::Type{E}) where E<:Exponent =
   if E isa UnionAll
@@ -264,6 +259,7 @@ negate(::Type{E}) where E<:Exponent =
     Exponent{-d, T}
   end
 unionall(E::Type{Exponent{n,T}}) where {n,T} = T isa DataType && T.abstract ? Exponent{n,<:T} : E
+unionall(U::UnionAll) = U
 
 # m^2 == m²
 Base.:^(::Type{U}, n::Integer) where U<:Unit = unionall(Exponent{n,U})
@@ -407,6 +403,7 @@ for op in (:*, :/)
     T($op(value(a), value(b)) * factor)
   end
 end
+
 # 5s * (1m/s) == 5m
 # 1m * 2m == 2m²
 # 1minute * (1m/s) == 60m
@@ -423,10 +420,13 @@ end
 # (2m^4)/(2m²) == 1m²
 # (1.1s^2)/1m² == (1.1s^2)/m²
 # 1kg/m * 1cm == 0.01kg
-
+# m/s == Combination{Tuple{m^1,s^-1}}
+# s/m² == Combination{Tuple{s^1,m^-2}}
+# s^2/m² == Combination{Tuple{s^2,m^-2}}
 # Combination{Tuple{s^1}} * Combination{Tuple{s^2}} == s^2
 # Combination{Tuple{s^2}}-Combination{Tuple{m^2}} == Combination{Tuple{s^2,m^-2}}
 for op in (:+, :-, :*, :/)
+  @eval Base.$op(::Type{A}, ::Type{B}) where {A<:Unit, B<:Unit} = $op(tocombination(A), tocombination(B))
   @eval Base.$op(::Type{A}, ::Type{B}) where {A<:Combination, B<:Combination} = begin
     params_a = params(A)
     params_b = params(B)
@@ -437,7 +437,7 @@ for op in (:+, :-, :*, :/)
       if ib == 0
         params_a[ia]
       elseif ia == 0
-        $(op == :- ? negate : identity)(params_b[ib])
+        $(op == :- || op == :/ ? negate : identity)(params_b[ib])
       else
         d1,TA = params_a[ia].parameters
         d2,TB = params_b[ib].parameters
