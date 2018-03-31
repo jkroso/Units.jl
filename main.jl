@@ -36,18 +36,22 @@ abstract type Temperature <: BaseUnit end
 abstract type DerivedUnit <: Unit end
 
 "Represents units like m²"
-struct Exponent{dimensions,D<:BaseUnit} <: DerivedUnit value::Real end
+struct Exponent{dimensions,D<:BaseUnit} <: DerivedUnit value::Number end
 
 "Represents units like m/s and N·m"
-struct Combination{D<:Tuple{Vararg{Exponent}}} <: DerivedUnit value::Real end
+struct Combination{D<:Tuple{Vararg{Exponent}}} <: DerivedUnit value::Number end
 
 "Represents percentages like 15%"
-struct Percent <: Real value::Rational end
+struct Percent <: Number value::Rational end
 Percent(n::AbstractFloat) = Percent(rationalize(n))
-Base.:-(a::Real, p::Percent) = a/(1 + p.value)
-Base.:+(a::Real, p::Percent) = a*(1 + p.value)
-Base.:*(a::Real, p::Percent) = a * p.value
-Base.:/(a::Real, p::Percent) = a / p.value
+Base.:-(a::Number, p::Percent) = a/(1 + p.value)
+Base.:+(a::Number, p::Percent) = a*(1 + p.value)
+Base.:*(a::Percent, b::Percent) = Percent(a.value * b.value)
+for op in (:*, :/)
+  @eval Base.$op(a::Number, b::Percent) = $op(a, b.value)
+  @eval Base.$op(a::Percent, b::Number) = $op(a.value, b)
+end
+Base.:/(a::Percent, b::Percent) = Percent(a.value / b.value)
 (p::Percent)(n::Real) = precise(n) * p.value
 Base.show(io::IO, p::Percent) = begin
   Base.print_shortest(io, Float64(p.value*100))
@@ -55,6 +59,9 @@ Base.show(io::IO, p::Percent) = begin
   nothing
 end
 Base.convert(::Type{T}, p::Percent) where T <: Real = p isa T ? p : convert(T, p.value)
+Base.convert(::Type{Percent}, n::Real) = Percent(n)
+Base.convert(::Type{Percent}, n::Percent) = n
+Base.promote_rule(::Type{Percent}, ::Type{B}) where B<:Real = Rational
 
 """
 Returns the shorthand notation for a given unit type
@@ -240,11 +247,6 @@ Base.:-(a::T) where T<:Unit = T(-(value(a)))
 # 1/m == (m^-1)(1)
 Base.:/(a::Number, B::Type{<:Unit}) = simplify(Combination{Tuple{inv(B)}})(a)
 
-# 1m/s == (m/s)(1)
-# 1m/s^2 == (m/s^2)(1)
-# 1m²/s^2 == (m²/s^2)(1)
-Base.:/(a::A, b::Type{B}) where {A<:Unit,B<:Unit} = (A/B)(a.value)
-
 toexponent(::Type{E}) where E<:Exponent = unionall(E)
 toexponent(::Type{D}) where D<:BaseUnit = unionall(Exponent{1,D})
 tocombination(::Type{A}) where A<:Combination = A
@@ -396,6 +398,9 @@ for op in (:*, :/)
   end
 end
 
+# 1m/s == (m/s)(1)
+# 1m/s^2 == (m/s^2)(1)
+# 1m²/s^2 == (m²/s^2)(1)
 # m * m == m² && m * cm == cm²
 # m^1 * m² == m³
 # m * m² == m³
