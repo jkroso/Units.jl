@@ -1,8 +1,15 @@
 @require "github.com/jkroso/Request.jl" GET
+@require "github.com/jkroso/parse-json.jl"
 @require "." abbr basefactor BaseUnit exports...
 
 const rates = let
-  data = parse(GET("http://api.fixer.io/latest?base=USD"))["rates"]
+  file = joinpath(@__DIR__(), "rates.json")
+  fstat = stat(file)
+  if !ispath(fstat) || Dates.unix2datetime(fstat.mtime) < Dates.today()
+    ispath(fstat) && rm(file)
+    write(file, GET("http://api.fixer.io/latest?base=USD"))
+  end
+  data = parse(MIME("application/json"), read(file))["rates"]
   Dict{Symbol,Rational}((Symbol(k)=>1/rationalize(v) for (k,v) ∈ data)..., :USD=>1)
 end
 
