@@ -268,14 +268,6 @@ Base.:^(::Type{Exponent{d,T}}, n::Integer) where {d,T} = unionall(Exponent{d*n,T
 # (1m²)^2 == 1m^4
 Base.:^(u::Exponent{d,T}, n::Integer) where {d,T} = Exponent{d*n,T}(value(u) ^ n)
 
-# m * m == m² && m * cm == cm²
-Base.:*(::Type{A}, ::Type{B}) where {A<:BaseUnit,B<:BaseUnit} = Exponent{2,promote_type(A,B)}
-# m^1 * m² == m³
-Base.:*(::Type{Exponent{da,T}}, ::Type{Exponent{db,T}}) where {da,db,T<:Unit} = Exponent{da+db,T}
-# m * m² == m³
-Base.:*(::Type{A}, ::Type{B}) where {A<:BaseUnit,B<:Exponent} = Exponent{1,A} * B
-Base.:*(::Type{B}, ::Type{A}) where {A<:BaseUnit,B<:Exponent} = Exponent{1,A} * B
-# 1m² * 2m² == 2m^4
 
 Base.convert(::Type{Exponent}, d::BaseUnit) = Exponent{1,typeof(d)}(d.value)
 Base.convert(::Type{Exponent}, u::Exponent) = u
@@ -385,7 +377,7 @@ for op in (:*, :/)
   @eval Base.$op(a::Unit, b::Combination) = $op(Combination(a), b)
   @eval Base.$op(a::Combination, b::Unit) = $op(a, Combination(b))
   @eval Base.$op(a::A, b::B) where {A<:Combination, B<:Combination} = begin
-    T = $(op == :* ? :+ : :-)(A, B)
+    T = $op(A, B)
     short, long = sort([params(A), params(B)], by=length)
     factor = 1
     for EA in short
@@ -404,6 +396,10 @@ for op in (:*, :/)
   end
 end
 
+# m * m == m² && m * cm == cm²
+# m^1 * m² == m³
+# m * m² == m³
+# 1m² * 2m² == 2m^4
 # 5s * (1m/s) == 5m
 # 1m * 2m == 2m²
 # 1minute * (1m/s) == 60m
@@ -423,7 +419,7 @@ end
 # m/s == Combination{Tuple{m^1,s^-1}}
 # s/m² == Combination{Tuple{s^1,m^-2}}
 # s^2/m² == Combination{Tuple{s^2,m^-2}}
-# Combination{Tuple{s^1}} * Combination{Tuple{s^2}} == s^2
+# Combination{Tuple{s^1}} * Combination{Tuple{s^2}} == s^3
 # Combination{Tuple{s^2}}-Combination{Tuple{m^2}} == Combination{Tuple{s^2,m^-2}}
 for op in (:+, :-, :*, :/)
   @eval Base.$op(::Type{A}, ::Type{B}) where {A<:Unit, B<:Unit} = $op(tocombination(A), tocombination(B))
@@ -441,7 +437,8 @@ for op in (:+, :-, :*, :/)
       else
         d1,TA = params_a[ia].parameters
         d2,TB = params_b[ib].parameters
-        Exponent{$op(d1,d2), promote_type(TA, TB)}
+        d = $(op == :* ? (+) : (-))(d1, d2)
+        Exponent{d, promote_type(TA, TB)}
       end
     end
     simplify(Combination{Tuple{exprs...}})
