@@ -238,7 +238,7 @@ end
 Base.:-(a::T) where T<:Unit = T(-(value(a)))
 
 # 1/m == (m^-1)(1)
-Base.:/(a::Number, B::Type{<:Unit}) = simplify(Combination{Tuple{negate(B)}})(a)
+Base.:/(a::Number, B::Type{<:Unit}) = simplify(Combination{Tuple{inv(B)}})(a)
 
 # 1m/s == (m/s)(1)
 # 1m/s^2 == (m/s^2)(1)
@@ -249,8 +249,8 @@ toexponent(::Type{E}) where E<:Exponent = unionall(E)
 toexponent(::Type{D}) where D<:BaseUnit = unionall(Exponent{1,D})
 tocombination(::Type{A}) where A<:Combination = A
 tocombination(::Type{A}) where A<:Unit = Combination{Tuple{toexponent(A)}}
-negate(::Type{D}) where D<:BaseUnit = unionall(Exponent{-1,D})
-negate(::Type{E}) where E<:Exponent =
+Base.inv(::Type{D}) where D<:BaseUnit = unionall(Exponent{-1,D})
+Base.inv(::Type{E}) where E<:Exponent =
   if E isa UnionAll
     d, var = E.body.parameters
     UnionAll(var, Exponent{-d, var})
@@ -433,7 +433,7 @@ for op in (:+, :-, :*, :/)
       if ib == 0
         params_a[ia]
       elseif ia == 0
-        $(op == :- || op == :/ ? negate : identity)(params_b[ib])
+        $(op == :- || op == :/ ? inv : identity)(params_b[ib])
       else
         d1,TA = params_a[ia].parameters
         d2,TB = params_b[ib].parameters
@@ -443,6 +443,8 @@ for op in (:+, :-, :*, :/)
     end
     simplify(Combination{Tuple{exprs...}})
   end
+  @eval Base.$op(a::A, ::Type{B}) where {A<:Unit,B<:Unit} = $op(A,B)(a.value)
+  @eval Base.$op(::Type{A}, b::B) where {A<:Unit,B<:Unit} = $op(A,B)(b.value)
 end
 
 @eval macro $:export(e)
@@ -490,5 +492,22 @@ end
 @export °F = Fahrenheit
 @export ° = Degree
 @export rad = Radian
+
+struct Ampere <: BaseUnit value::Real end
+abbr(::Type{Ampere}) = "A"
+
+@export Amp = Ampere
+@export Joule = kg*m²/s^2
+@export Newton = kg*m/s^2
+@export Watt = Joule/s
+@export W = Watt
+@export kW = 1000W
+@export kWh = kW*hr
+@export Pascal = Newton/m²
+@export Hertz = inv(s)
+@export Coulomb = Amp*s
+@export Volt = Joule/Coulomb
+@export V = Volt
+@export Ohm = Volt/Amp
 
 export Length, Mass, Time, Angle, Temperature
