@@ -17,7 +17,19 @@ abstract type Money <: BaseUnit end
 struct Dollar{nation} <: Money value::Real end
 
 # sprint(show, 1NZD) == "1.00 NZD"
-Base.show(io::IO, d::Dollar) = @printf(io, "%0.2f %s", d.value, abbr(typeof(d)))
+Base.show(io::IO, d::Dollar) =
+  write(io, "$(seperate(sprint((io, x)->@printf(io, "%0.2f", x), d.value))) $(abbr(typeof(d)))")
+
+seperate(value::Number; kwargs...) = seperate(string(convert(Float64, value)), kwargs...)
+seperate(value::Integer; kwargs...) = seperate(string(value), kwargs...)
+seperate(str::String, sep = ",", k = 3) = begin
+  parts = split(str, '.')
+  str = parts[1]
+  n = length(str)
+  groups = (str[max(x-k+1, 1):x] for x in reverse(n:-k:1))
+  length(parts) == 1 && return join(groups, sep)
+  join([join(groups, sep), parts[2]], '.')
+end
 
 abbr(::Type{Dollar{c}}) where c = string(c)
 basefactor(::Type{Dollar{abbr}}) where abbr = rates[abbr]
