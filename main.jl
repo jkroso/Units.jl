@@ -173,12 +173,7 @@ end
 
 Base.abs(::Type{Exponent{n,T}}) where {n,T} = Exponent{abs(n), T}
 Base.exponent(::Type{T}) where T<:Unit = 1
-Base.exponent(::Type{E}) where E<:Exponent =
-  if E isa UnionAll
-    E.body.parameters[1]
-  else
-    E.parameters[1]
-  end
+Base.exponent(::Type{E}) where E<:Exponent = parameters(E)[1]
 
 """
 Get a units abstract type
@@ -189,11 +184,11 @@ abstract_unit(m) == Length
 ```
 """
 abstract_unit(::Type{Exponent{n,T}}) where {n,T} = Exponent{n,<:abstract_unit(T)}
-abstract_unit(::Type{C}) where C<:Combination = Combination{Tuple{map(abstract_unit, params(C))...}}
+abstract_unit(::Type{C}) where C<:Combination = Combination{<:Tuple{map(abstract_unit, params(C))...}}
 abstract_unit(::Type{T}) where T<:BaseUnit =
   supertype(T) == BaseUnit ? abstract_type(T) : abstract_unit(supertype(T))
 # abstract_unit(m²) == Exponent{2,<:Length}
-# abstract_unit(m/s) == Combination{Tuple{Exponent{1,<:Length},Exponent{-1,<:Time}}}
+# abstract_unit(m/s) == Combination{<:Tuple{Exponent{1,<:Length},Exponent{-1,<:Time}}}
 # abstract_unit(m) == Length
 # abstract_unit(s) == Time
 
@@ -205,16 +200,21 @@ baseunit(m²) == Length
 baseunit(m) == Length
 ```
 """
-baseunit(::Type{T}) where T<:BaseUnit = abstract_unit(T)
+baseunit(u::Unit) = baseunit(typeof(u))
+baseunit(::Type{T}) where T<:BaseUnit = supertype(T) == BaseUnit ? abstract_type(T) : baseunit(supertype(T))
 baseunit(::Type{T}) where T<:Exponent = begin
   if T isa UnionAll
     T.body.parameters[2].ub
   else
-    abstract_unit(T.parameters[2])
+    baseunit(T.parameters[2])
   end
 end
 # baseunit(Length^1) == Length
 # baseunit(Meter{0}^1) == Length
+baseunit(::Type{C}) where C<:Combination = begin
+  Combination{Tuple{map(T->Exponent{exponent(T), baseunit(T)}, params(C))...}}
+end
+# baseunit(m/s) == Combination{Tuple{Exponent{1,Length},Exponent{-1,Time}}}
 
 "Convert to a UnionAll if its a parametric DataType"
 abstract_type(T::UnionAll) = T
@@ -260,7 +260,8 @@ Base.inv(::Type{E}) where E<:Exponent =
     d, T = E.parameters
     Exponent{-d, T}
   end
-unionall(E::Type{Exponent{n,T}}) where {n,T} = T isa DataType && T.abstract ? Exponent{n,<:T} : E
+# Exponent{1,Time{1//1}} <: Exponent{1,<:Time}
+unionall(E::Type{Exponent{n,T}}) where {n,T} = (T isa DataType && T.abstract) || T isa UnionAll ? Exponent{n,<:T} : E
 unionall(U::UnionAll) = U
 
 # m^2 == m²
@@ -343,12 +344,15 @@ abbr(::Type{T}) where T<:Gram = string(get(prefix, magnitude(T), ""), "g")
 abbr(::Type{Gram{6}}) = "ton"
 Base.promote_rule{a,b}(::Type{Gram{a}}, ::Type{Gram{b}}) = Gram{min(a,b)}
 
-for λ ∈ (:<, :>, :!=, :(==))
+for λ ∈ (:<, :>, :(==))
   @eval begin
     # 1g < 2g
     Base.$λ(a::T,b::T) where T<:Unit = $λ(value(a), value(b))
     # 1kg > 2g
-    Base.$λ(a::Unit,b::Unit) = $λ(promote(a,b)...)
+    Base.$λ(a::Unit,b::Unit) = begin
+      @assert baseunit(a) == baseunit(b)
+      $λ(promote(a,b)...)
+    end
     # 1kg > 2
     Base.$λ(a::Real,b::Unit) = $λ(a, convert(Real, b))
     # 1 < 1kg
@@ -356,6 +360,7 @@ for λ ∈ (:<, :>, :!=, :(==))
   end
 end
 
+params(U::UnionAll) = U.body.parameters[1].ub.parameters
 params(::Type{Combination{T}}) where T<:Tuple = T.parameters
 params(::Type{E}) where E<:Exponent = Core.svec(E)
 params(::Type{D}) where D<:BaseUnit = Core.svec(Exponent{1,D})
@@ -432,7 +437,7 @@ for op in (:+, :-, :*, :/)
     params_a = params(A)
     params_b = params(B)
     dimensions = union(map(baseunit, params_a), map(baseunit, params_b))
-    exprs = map(dimensions) do D
+    units = map(dimensions) do D
       ia = findfirst(E->baseunit(E) == D, params_a)
       ib = findfirst(E->baseunit(E) == D, params_b)
       if ib == 0
@@ -440,17 +445,40 @@ for op in (:+, :-, :*, :/)
       elseif ia == 0
         $(op == :- || op == :/ ? inv : identity)(params_b[ib])
       else
-        d1,TA = params_a[ia].parameters
-        d2,TB = params_b[ib].parameters
+        d1,TA = parameters(params_a[ia])
+        d2,TB = parameters(params_b[ib])
         d = $(op == :* ? (+) : (-))(d1, d2)
-        Exponent{d, promote_type(TA, TB)}
+        if !isabstract(TA) && !isabstract(TB)
+          Exponent{d, promote_type(TA, TB)}
+        else
+          Exponent{d, <:ub(TA)}
+        end
       end
     end
-    simplify(Combination{Tuple{exprs...}})
+    combine(units)
   end
   @eval Base.$op(a::A, ::Type{B}) where {A<:Unit,B<:Unit} = $op(A,B)(a.value)
   @eval Base.$op(::Type{A}, b::B) where {A<:Unit,B<:Unit} = $op(A,B)(b.value)
 end
+
+combine(types) = begin
+  p = collect(Iterators.filter(E->exponent(E) != 0, types))
+  length(p) == 0 && return Real
+  length(p) == 1 && return simplify(p[1])
+  if any(isabstract, p)
+    Combination{<:Tuple{p...}}
+  else
+    Combination{Tuple{p...}}
+  end
+end
+
+parameters(D::DataType) = D.parameters
+parameters(U::UnionAll) = parameters(U.body)
+ub(D::DataType) = D
+ub(D::TypeVar) = D.ub
+ub(D::UnionAll) = D.body
+isabstract(::Union{TypeVar,UnionAll}) = true
+isabstract(D::DataType) = D.hasfreetypevars
 
 @eval macro $:export(e)
   quote
@@ -462,7 +490,9 @@ end
 @export Area = Length^2
 @export Volume = Length^3
 @export Pressure = Mass/Area
+# m/s <: Speed
 @export Speed = Length/Time
+# m/s^2 <: Acceleration
 @export Acceleration = Speed/Time
 @export Jerk = Acceleration/Time
 
@@ -491,7 +521,6 @@ for mag in (3, 0, -3, -6, -9)
   @eval @export $name = Gram{$mag}
 end
 @export ton = Gram{6}
-
 @export K = Kelvin
 @export °C = Celsius
 @export °F = Fahrenheit
@@ -514,5 +543,6 @@ abbr(::Type{Ampere}) = "A"
 @export Volt = Joule/Coulomb
 @export V = Volt
 @export Ohm = Volt/Amp
+@export gravity = 9.80665m/s^2
 
 export Length, Mass, Time, Angle, Temperature
