@@ -7,10 +7,10 @@ const rates = let
   if !ispath(fstat) || Dates.unix2datetime(fstat.mtime) < Dates.today()
     @require "github.com/jkroso/Request.jl" GET
     ispath(fstat) && rm(file)
-    write(file, GET("http://api.fixer.io/latest?base=USD"))
+    write(file, GET("http://data.fixer.io/api/latest?access_key=e4778c003b3cc59118912e5bd266b9ff"))
   end
   data = parse(MIME("application/json"), read(file))["rates"]
-  Dict{Symbol,Rational}((Symbol(k)=>1/rationalize(v) for (k,v) ∈ data)..., :USD=>1)
+  Dict{Symbol,Rational}((Symbol(k)=>1/rationalize(v) for (k,v) ∈ data)...)
 end
 
 abstract type Money <: BaseUnit end
