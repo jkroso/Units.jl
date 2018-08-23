@@ -342,7 +342,7 @@ abbr(::Type{T}) where T<:Gram = string(get(prefix, magnitude(T), ""), "g")
 abbr(::Type{Gram{6}}) = "ton"
 Base.promote_rule(::Type{Gram{a}}, ::Type{Gram{b}}) where {a,b} = Gram{min(a,b)}
 
-for λ ∈ (:<, :>, :(==))
+for λ ∈ (:<, :>, :(==), :isless)
   @eval begin
     # 1g < 2g
     Base.$λ(a::T,b::T) where T<:Unit = $λ(value(a), value(b))
