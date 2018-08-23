@@ -1,3 +1,5 @@
+@require "github.com/jkroso/Rutherford.jl/Juno/main.jl" seperate
+
 # map magnitudes to their standard name
 const prefix = Dict(1 => :da,
                     2 => :h,
@@ -53,11 +55,7 @@ for op in (:*, :/)
 end
 Base.:/(a::Percent, b::Percent) = Percent(a.value / b.value)
 (p::Percent)(n::Real) = precise(n) * p.value
-Base.show(io::IO, p::Percent) = begin
-  Base.print_shortest(io, Float64(p.value*100))
-  write(io, '%')
-  nothing
-end
+Base.show(io::IO, p::Percent) = print(io, Float64(p.value*100), '%')
 Base.convert(::Type{T}, p::Percent) where T <: Real = p isa T ? p : convert(T, p.value)
 Base.convert(::Type{Percent}, n::Real) = Percent(n)
 Base.convert(::Type{Percent}, n::Percent) = n
@@ -108,7 +106,7 @@ end
 conversion_factor(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = begin
   pa, pb = (params(A), params(B))
   @assert length(pa) == length(pb) "$B is not equivelent to $A"
-  foldl((value, p)->value * conversion_factor(p[1], p[2]), 1, zip(pa, pb))
+  foldl((value, p)->value * conversion_factor(p[1], p[2]), zip(pa, pb), init=1)
 end
 
 "Convert to the most precise type possible"
@@ -155,7 +153,7 @@ Base.show(io::IO, c::Combination) = begin
 end
 
 Base.show(io::IO, e::Exponent{d,U}) where {d,U} = begin
-  show(io, e.value)
+  write(io, seperate(convert(Float64, e.value)))
   if d < 0
     write(io, '/', abbr(U))
     d < -1 && write(io, exponents[Int(abs(d))])
@@ -166,7 +164,7 @@ Base.show(io::IO, e::Exponent{d,U}) where {d,U} = begin
 end
 
 Base.show(io::IO, t::Unit) = begin
-  Base.print_shortest(io, convert(Float64, t.value))
+  write(io, seperate(convert(Float64, t.value)))
   write(io, abbr(typeof(t)))
   nothing
 end
@@ -342,7 +340,7 @@ struct Gram{m} <: Mass value::Real end
 magnitude(::Type{Gram{m}}) where m = m
 abbr(::Type{T}) where T<:Gram = string(get(prefix, magnitude(T), ""), "g")
 abbr(::Type{Gram{6}}) = "ton"
-Base.promote_rule{a,b}(::Type{Gram{a}}, ::Type{Gram{b}}) = Gram{min(a,b)}
+Base.promote_rule(::Type{Gram{a}}, ::Type{Gram{b}}) where {a,b} = Gram{min(a,b)}
 
 for λ ∈ (:<, :>, :(==))
   @eval begin
@@ -380,9 +378,9 @@ Base.promote_rule(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = 
   Combination{Tuple{map(promote_type, params(A), params(B))...}}
 end
 for op in (:*, :/)
-  @eval Base.$op(a::Unit, b::Unit) = $op(Combination(a), Combination(b))
-  @eval Base.$op(a::Unit, b::Combination) = $op(Combination(a), b)
-  @eval Base.$op(a::Combination, b::Unit) = $op(a, Combination(b))
+  @eval Base.$op(a::Unit, b::Unit) = $op(convert(Combination, a), convert(Combination, b))
+  @eval Base.$op(a::Unit, b::Combination) = $op(convert(Combination, a), b)
+  @eval Base.$op(a::Combination, b::Unit) = $op(a, convert(Combination, b))
   @eval Base.$op(a::A, b::B) where {A<:Combination, B<:Combination} = begin
     T = $op(A, B)
     short, long = sort([params(A), params(B)], by=length)
@@ -390,7 +388,7 @@ for op in (:*, :/)
     for EA in short
       D = baseunit(EA)
       i = findfirst(E->baseunit(E) == D, long)
-      i > 0 || continue
+      i == nothing && continue
       EB = long[i]
       d1,T1 = EA.parameters
       d2,T2 = EB.parameters
@@ -440,9 +438,9 @@ for op in (:+, :-, :*, :/)
     units = map(dimensions) do D
       ia = findfirst(E->baseunit(E) == D, params_a)
       ib = findfirst(E->baseunit(E) == D, params_b)
-      if ib == 0
+      if ib == nothing
         params_a[ia]
-      elseif ia == 0
+      elseif ia == nothing
         $(op == :- || op == :/ ? inv : identity)(params_b[ib])
       else
         d1,TA = parameters(params_a[ia])
@@ -536,13 +534,13 @@ abbr(::Type{Ampere}) = "A"
 @export Watt = Joule/s
 @export W = Watt
 @export kW = 1000W
-@export kWh = kW*hr
+@export kWh = kW*1hr
 @export Pascal = Newton/m²
 @export Hertz = inv(s)
 @export Coulomb = Amp*s
 @export Volt = Joule/Coulomb
 @export V = Volt
 @export Ohm = Volt/Amp
-@export gravity = 9.80665m/s^2
+@export gravity = 9.80665m/s^2 # http://physics.nist.gov/cgi-bin/cuu/Value?gn
 
 export Length, Mass, Time, Angle, Temperature

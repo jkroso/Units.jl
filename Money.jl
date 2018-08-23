@@ -1,11 +1,13 @@
 @require "github.com/jkroso/parse-json.jl"
+@require "github.com/jkroso/Request.jl" GET
 @require "." abbr basefactor BaseUnit exports...
+import Dates: unix2datetime, today
+import Printf.@printf
 
 const rates = let
   file = joinpath(@__DIR__(), "rates.json")
   fstat = stat(file)
-  if !ispath(fstat) || Dates.unix2datetime(fstat.mtime) < Dates.today()
-    @require "github.com/jkroso/Request.jl" GET
+  if !ispath(fstat) || unix2datetime(fstat.mtime) < today()
     ispath(fstat) && rm(file)
     write(file, GET("http://data.fixer.io/api/latest?access_key=e4778c003b3cc59118912e5bd266b9ff"))
   end
