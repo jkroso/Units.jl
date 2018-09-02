@@ -154,7 +154,9 @@ end
 
 Base.show(io::IO, e::Exponent{d,U}) where {d,U} = begin
   write(io, seperate(convert(Float64, e.value)))
-  if d < 0
+  if hasmethod(abbr, Tuple{Type{typeof(e)}})
+    write(io, abbr(typeof(e)))
+  elseif d < 0
     write(io, '/', abbr(U))
     d < -1 && write(io, exponents[Int(abs(d))])
   else
