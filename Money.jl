@@ -1,5 +1,5 @@
 @require "github.com/jkroso/parse-json.jl"
-@require "github.com/jkroso/Request.jl" GET
+@require "github.com/jkroso/HTTP.jl/client" GET
 @require "." abbr basefactor BaseUnit exports...
 import Dates: unix2datetime, today
 import Printf.@printf
