@@ -1,3 +1,4 @@
+@require "github.com/MikeInnes/MacroTools.jl" => MacroTools @match @capture
 @require "github.com/jkroso/Rutherford.jl/Juno/main.jl" seperate
 
 # map magnitudes to their standard name
@@ -42,6 +43,29 @@ struct Exponent{dimensions,D<:BaseUnit} <: DerivedUnit value::Number end
 
 "Represents units like m/s and N·m"
 struct Combination{D<:Tuple{Vararg{Exponent}}} <: DerivedUnit value::Number end
+
+const Units = @__MODULE__()
+
+"Define a unit and some basic methods for it"
+macro unit(name, shortname, common_magnitudes=())
+  declaration = @match name begin
+    (s_Symbol) => :($(esc(s)){$(esc(:m))} <: BaseUnit)
+    (s_Symbol <: p_Symbol) => :($(esc(s)){$(esc(:m))} <: $(esc(p)))
+  end
+  @capture(declaration, (n_{_} <: _))
+  quote
+    struct $declaration
+      value::Real
+    end
+    $Units.magnitude(::Type{$n{m}}) where m = m
+    $Units.abbr(::Type{T}) where T<:$n = string(get(prefix, magnitude(T), ""), $(string(shortname)))
+    Base.promote_rule(::Type{$n{f1}},::Type{$n{f2}}) where {f1,f2} = $n{min(f1,f2)}
+    $(map(eval(common_magnitudes)) do mag
+      name = Symbol(get(prefix, mag, ""), shortname)
+      :(const $(esc(name)) = $n{$mag})
+    end...)
+  end
+end
 
 "Represents percentages like 15%"
 struct Percent <: Number value::Rational end
@@ -286,12 +310,9 @@ Base.sqrt(s::Exponent{d,T}) where {d,T} = begin
   n == 1 ? T(sqrt(value(s))) : Exponent{n,T}(sqrt(value(s)))
 end
 
-struct Meter{magnitude} <: Length value::Real end
-
-abbr(M::Type{<:Meter}) = string(get(prefix, magnitude(M), ""), 'm')
-magnitude(::Type{Meter{m}}) where m = m
-Base.promote_rule(::Type{Meter{m1}},::Type{Meter{m2}}) where {m1,m2} = Meter{min(m1,m2)}
+@unit Meter <: Length m (3, 0, -2, -3, -6, -9)
 # promote(1mm, 2m) == (1mm, 2000mm)
+
 
 struct Time{factor} <: BaseUnit value::Real end
 
@@ -338,11 +359,8 @@ Base.promote_rule(::Type{<:Temperature}, ::Type{<:Temperature}) = Kelvin
 Base.convert(::Type{Kelvin}, t::T) where T<:Union{Celsius,Fahrenheit} =
   Kelvin((precise(t.value) + baseoffset(T)) * basefactor(T))
 
-struct Gram{m} <: Mass value::Real end
-magnitude(::Type{Gram{m}}) where m = m
-abbr(::Type{T}) where T<:Gram = string(get(prefix, magnitude(T), ""), "g")
+@unit Gram <: Mass g (3, 0, -3, -6, -9)
 abbr(::Type{Gram{6}}) = "ton"
-Base.promote_rule(::Type{Gram{a}}, ::Type{Gram{b}}) where {a,b} = Gram{min(a,b)}
 
 for λ ∈ (:<, :>, :(==), :isless)
   @eval begin
