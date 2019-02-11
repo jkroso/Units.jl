@@ -1,4 +1,4 @@
-@require "github.com/jkroso/Rutherford.jl/Juno/main.jl" seperate
+@require "github.com/jkroso/Rutherford.jl/Juno" seperate render @dom
 
 # map magnitudes to their standard name
 const prefix = Dict(1 => :da,
@@ -132,8 +132,12 @@ end
 # abbr(Combination{Tuple{m²,hr^1}}) == "m²·hr"
 abbr(::Type{C}) where C<:Combination = begin
   str = sprint(abbr_params, params(C))
-  str[chr2ind(str, 2):end]
+  str[nextind(str, 0, 2):end]
 end
+
+render(u::Unit) = @dom[:span render(to_real(u)) abbr(typeof(u))]
+to_real(n) = try convert(Integer, n) catch; convert(Float64, n) end
+to_real(u::Unit) = to_real(value(u))
 
 abbr_params(io, params) =
   for T ∈ params
