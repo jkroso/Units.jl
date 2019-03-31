@@ -46,18 +46,20 @@ struct Combination{D<:Tuple{Vararg{Exponent}}} <: DerivedUnit value::Number end
 "Represents percentages like 15%"
 struct Percent <: Number value::Rational end
 Percent(n::AbstractFloat) = Percent(rationalize(n))
-Base.:-(a::Number, p::Percent) = a/(1 + p.value)
-Base.:+(a::Number, p::Percent) = a*(1 + p.value)
-Base.:*(a::Percent, b::Percent) = Percent(a.value * b.value)
+Base.:-(a::Number, p::Percent) = a/(1 + p.value/100)
+Base.:+(a::Number, p::Percent) = a*(1 + p.value/100)
+Base.:*(a::Percent, b::Percent) = Percent((a.value/100) * (b.value/100))
+Base.:+(a::Percent, b::Percent) = Percent(a.value + b.value)
+Base.:-(a::Percent, b::Percent) = Percent(a.value - b.value)
 for op in (:*, :/)
-  @eval Base.$op(a::Number, b::Percent) = $op(a, b.value)
-  @eval Base.$op(a::Percent, b::Number) = $op(a.value, b)
+  @eval Base.$op(a::Number, b::Percent) = $op(a, b.value/100)
+  @eval Base.$op(a::Percent, b::Number) = $op(a.value/100, b)
 end
 Base.:/(a::Percent, b::Percent) = Percent(a.value / b.value)
-(p::Percent)(n::Real) = precise(n) * p.value
-Base.show(io::IO, p::Percent) = print(io, Float64(p.value*100), '%')
+(p::Percent)(n::Real) = precise(n) * (p.value/100)
+Base.show(io::IO, p::Percent) = print(io, Float64(p.value), '%')
 Base.convert(::Type{T}, p::Percent) where T <: Real = p isa T ? p : convert(T, p.value)
-Base.convert(::Type{Percent}, n::Real) = Percent(n)
+Base.convert(::Type{Percent}, n::Real) = Percent(100n)
 Base.convert(::Type{Percent}, n::Percent) = n
 Base.promote_rule(::Type{Percent}, ::Type{B}) where B<:Real = Rational
 
