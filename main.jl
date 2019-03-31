@@ -100,7 +100,7 @@ end
 conversion_factor(::Type{A}, ::Type{B}) where {d1,d2,TA,TB,A<:Exponent{d1,TA},B<:Exponent{d2,TB}} = begin
   @assert typejoin(TA, TB) != BaseUnit "can't convert $TB to $TA"
   @assert d1 == d2 "$A needs to have the same exponent count as $B"
-  basefactor(TB)^d2/basefactor(TA)^d1
+  basefactor(B)/basefactor(A)
 end
 # conversion_factor(m²/hr, cm²/s) == 9//25
 conversion_factor(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = begin
@@ -229,6 +229,7 @@ Base.convert(::Type{N}, u::U) where {N<:Real,U<:Unit} = convert(N, u.value * bas
 # convert(km, 1) == 1km
 Base.convert(::Type{U}, n::Real) where U<:Unit = U(n)
 # convert(km, 1000m) == 1km
+# convert(day^-1, 1/year) == (1/365.2425)day^-1
 Base.convert(::Type{B}, a::A) where {A<:Unit,B<:Unit} = B(value(a) * conversion_factor(B, A))
 
 # 2cm == Meter{-2}(2)
