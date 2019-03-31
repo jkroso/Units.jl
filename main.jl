@@ -384,27 +384,28 @@ Base.convert(::Type{Combination}, x::BaseUnit) = Combination{Tuple{Exponent{1,ty
 Base.promote_rule(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = begin
   Combination{Tuple{map(promote_type, params(A), params(B))...}}
 end
+# (60m/s) / (1°/minute) == 3600m/°
+# (60m/s) / (1/minute) == 3600m
 for op in (:*, :/)
   @eval Base.$op(a::Unit, b::Unit) = $op(convert(Combination, a), convert(Combination, b))
   @eval Base.$op(a::Unit, b::Combination) = $op(convert(Combination, a), b)
   @eval Base.$op(a::Combination, b::Unit) = $op(a, convert(Combination, b))
   @eval Base.$op(a::A, b::B) where {A<:Combination, B<:Combination} = begin
     T = $op(A, B)
-    short, long = sort([params(A), params(B)], by=length)
-    factor = 1
-    for EA in short
+    params_a, params_b = (params(A), params(B))
+    value_a, value_b = (value(a), value(b))
+    for EA in params_a
       D = baseunit(EA)
-      i = findfirst(E->baseunit(E) == D, long)
+      i = findfirst(E->baseunit(E) == D, params_b)
       i == nothing && continue
-      EB = long[i]
-      d1,T1 = EA.parameters
-      d2,T2 = EB.parameters
-      T0 = promote_type(T1, T2)
-      ba = basefactor(EA)/basefactor(Exponent{d1,T0})
-      bb = basefactor(EB)/basefactor(Exponent{d2,T0})
-      factor *= ba * bb
+      EB = params_b[i]
+      da,TA = EA.parameters
+      db,TB = EB.parameters
+      T0 = promote_type(TA, TB)
+      value_a *= basefactor(EA)/basefactor(Exponent{da,T0})
+      value_b *= basefactor(EB)/basefactor(Exponent{db,T0})
     end
-    T($op(value(a), value(b)) * factor)
+    T($op(value_a, value_b))
   end
 end
 
@@ -423,7 +424,7 @@ end
 # Combination{Tuple{s^1}}(12) * Combination{Tuple{km^1, minute^-1}}(1) == (1//5)km
 # 1mm² * 2cm^1 == 20mm³
 # 2m²/1m² == 2
-# 1s/5s == 0.2
+# 1s/5s == 1//5
 # 1m/5s == 0.2m/s
 # 1.1s/1m² == 1.1s/m²
 # (1.1s^2)/1m == 1.1s^2/m && 1m²/2m == 0.5m
