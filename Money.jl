@@ -1,5 +1,4 @@
 @require "github.com/jkroso/parse-json.jl"
-@require "github.com/jkroso/HTTP.jl/client" GET
 @require "." abbr basefactor BaseUnit exports...
 import Dates: unix2datetime, today
 import Printf.@printf
@@ -9,7 +8,7 @@ const rates = let
   fstat = stat(file)
   if !ispath(fstat) || unix2datetime(fstat.mtime) < today()
     ispath(fstat) && rm(file)
-    write(file, GET("http://data.fixer.io/api/latest?access_key=e4778c003b3cc59118912e5bd266b9ff"))
+    download("http://data.fixer.io/api/latest?access_key=e4778c003b3cc59118912e5bd266b9ff", file)
   end
   data = parse(MIME("application/json"), read(file))["rates"]
   Dict{Symbol,Rational}((Symbol(k)=>1/rationalize(v) for (k,v) ∈ data)...)
