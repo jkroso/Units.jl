@@ -1,4 +1,4 @@
-@require "github.com/jkroso/Rutherford.jl/Juno" seperate render @dom
+@require "github.com/jkroso/Rutherford.jl/render" seperate render @dom
 
 # map magnitudes to their standard name
 const prefix = Dict(1 => :da,
@@ -156,6 +156,18 @@ Base.show(io::IO, c::Combination) = begin
   first, rest = (p[1], p[2:end])
   show(io, simplify(first)(value(c)))
   abbr_params(io, rest)
+end
+
+"Formats long numbers with commas seperating it into chunks"
+seperate(value::Number; kwargs...) = seperate(string(convert(Float64, value)), kwargs...)
+seperate(value::Integer; kwargs...) = seperate(string(value), kwargs...)
+seperate(str::String, sep = ",", k = 3) = begin
+  parts = split(str, '.')
+  str = parts[1]
+  n = length(str)
+  groups = (str[max(x-k+1, 1):x] for x in reverse(n:-k:1))
+  whole_part = join(groups, sep)
+  length(parts) == 1 ? whole_part : join([whole_part,  parts[2]], '.')
 end
 
 Base.show(io::IO, e::Exponent{d,U}) where {d,U} = begin
