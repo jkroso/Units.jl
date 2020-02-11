@@ -1,5 +1,5 @@
-@require "github.com/jkroso/parse-json.jl"
-@require "." abbr basefactor BaseUnit exports...
+@use "github.com/jkroso/parse-json.jl"
+@use "." abbr basefactor BaseUnit exports...
 import Dates: unix2datetime, today
 import Printf.@printf
 

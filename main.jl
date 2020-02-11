@@ -1,4 +1,4 @@
-@require "github.com/jkroso/Rutherford.jl/render" seperate render @dom
+@use "github.com/jkroso/Rutherford.jl/draw.jl" doodle @dom
 
 # map magnitudes to their standard name
 const prefix = Dict(1 => :da,
@@ -137,7 +137,7 @@ abbr(::Type{C}) where C<:Combination = begin
   str[nextind(str, 0, 2):end]
 end
 
-render(u::Unit) = @dom[:span render(to_real(u)) abbr(typeof(u))]
+doodle(u::Unit) = @dom[:span doodle(to_real(u)) abbr(typeof(u))]
 to_real(n) = try convert(Integer, n) catch; convert(Float64, n) end
 to_real(u::Unit) = to_real(value(u))
 
