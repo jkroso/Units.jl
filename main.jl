@@ -139,7 +139,7 @@ to_real(n) = try convert(Integer, n) catch; convert(Float64, n) end
 to_real(u::Unit) = to_real(value(u))
 
 abbr_params(io, params) =
-  for T ∈ params
+  for T in params
     d, ET = T.parameters
     d == 0 && continue
     print(io, d > 0 ? '·' : '/', abbr(ET))
@@ -156,8 +156,7 @@ Base.show(io::IO, c::Combination) = begin
 end
 
 "Formats long numbers with commas seperating it into chunks"
-seperate(value::Number; kwargs...) = seperate(string(convert(Float64, value)), kwargs...)
-seperate(value::Integer; kwargs...) = seperate(string(value), kwargs...)
+seperate(n::Number; kwargs...) = seperate(string(convert(isinteger(n) ? Int : Float64, n)), kwargs...)
 seperate(str::String, sep = ",", k = 3) = begin
   parts = split(str, '.')
   str = parts[1]
@@ -168,7 +167,7 @@ seperate(str::String, sep = ",", k = 3) = begin
 end
 
 Base.show(io::IO, e::Exponent{d,U}) where {d,U} = begin
-  write(io, seperate(convert(Float64, e.value)))
+  write(io, seperate(e.value))
   if hasmethod(abbr, Tuple{Type{typeof(e)}})
     write(io, abbr(typeof(e)))
   elseif d < 0
@@ -181,7 +180,7 @@ Base.show(io::IO, e::Exponent{d,U}) where {d,U} = begin
 end
 
 Base.show(io::IO, t::Unit) = begin
-  write(io, seperate(convert(Float64, t.value)))
+  write(io, seperate(t.value))
   write(io, abbr(typeof(t)))
   nothing
 end
