@@ -1,5 +1,3 @@
-@use "github.com/jkroso/Rutherford.jl/draw.jl" doodle @dom
-
 # map magnitudes to their standard name
 const prefix = Dict(1 => :da,
                     2 => :h,
@@ -137,7 +135,6 @@ abbr(::Type{C}) where C<:Combination = begin
   str[nextind(str, 0, 2):end]
 end
 
-doodle(u::Unit) = @dom[:span doodle(to_real(u)) abbr(typeof(u))]
 to_real(n) = try convert(Integer, n) catch; convert(Float64, n) end
 to_real(u::Unit) = to_real(value(u))
 
