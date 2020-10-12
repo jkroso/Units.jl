@@ -28,18 +28,52 @@ abstract type Unit <: Number end
 "Base units are the primitive types all others are derived from"
 abstract type BaseUnit <: Unit end
 
-abstract type Length <: BaseUnit end
-abstract type Mass <: BaseUnit end
-abstract type Angle <: BaseUnit end
-abstract type Temperature <: BaseUnit end
+abstract type SIUnit{D} <: BaseUnit end
+
+baremodule SIUnits
+  import Base.@enum
+  @enum SIUnit Time Length Mass Current Temperature Substance Luminosity Angle
+end
+
+for u in instances(SIUnits.SIUnit)
+  @eval const $(Symbol(u)) = SIUnit{$u}
+end
 
 abstract type DerivedUnit <: Unit end
+
+sort_params(s) = begin
+  out = Vector{Any}(undef, length(s))
+  for i in 1:length(s)
+    out[i] = s[i]
+  end
+  out
+  sort!(out, by=siunit)
+end
+siunit(T::Type{BaseUnit}) = 99
+siunit(T::Type{Unit}) = 100
+siunit(T::Type{SIUnit{S}}) where S = S
+siunit(T::Type{<:DerivedUnit}) = siunit(supertype(T))
 
 "Represents units like m²"
 struct Exponent{dimensions,D<:BaseUnit} <: DerivedUnit value::Number end
 
 "Represents units like m/s and N·m"
-struct Combination{D<:Tuple{Vararg{Exponent}}} <: DerivedUnit value::Number end
+struct Combination{D<:Tuple{Vararg{Exponent}}, magnitude} <: DerivedUnit
+  value::Number
+end
+
+"""
+Enables you to treat derived units as if they were base units and provides the
+ability to define a scale factor which is necessary for representing units like
+`Wh`
+"""
+struct SealedUnit{U<:Combination, scale} <: BaseUnit
+  value::Number
+end
+
+scale(::Type{SealedUnit{U,s}}) where {U,s} = s
+scale(::Type{SealedUnit{U,s}}, s2) where {U,s} = SealedUnit{U, s2}
+scale(::Type{U}, s) where U<:Combination = SealedUnit{U, s}
 
 "Represents percentages like 15%"
 struct Percent <: Number value::Rational end
@@ -65,14 +99,41 @@ Base.promote_rule(::Type{Percent}, ::Type{B}) where B<:Real = Rational
 Returns the shorthand notation for a given unit type
 """
 function abbr end
+abbr(::Type{SealedUnit{U,s}}) where {U,s} = "$(abbr(U)) × $(scale(S))"
+abbr(::Type{Exponent{n,T}}) where {n,T} = begin
+  n == 1 && return abbr(T)
+  n == 0 && return string(abbr(T), '⁰')
+  n > 1 && return string(abbr(T), exponents[Int(n)])
+  string(abbr(T), '⁻', exponents[Int(abs(n))])
+end
+abbr(::Type{C}) where C<:Combination = begin
+  str = sprint(abbr_params, params(C))
+  str[nextind(str, 0, 2):end]
+end
+abbr_params(io, params) =
+  for T in params
+    d, ET = T.parameters
+    d == 0 && continue
+    print(io, d > 0 ? '·' : '/', abbr(ET))
+    d = abs(d)
+    d > 1 && print(io, exponents[d])
+  end
+# abbr(Combination{Tuple{m²,hr^-1},0}) == "m²/hr"
+# abbr(Combination{Tuple{m²,hr^1},0}) == "m²·hr"
 
 """
-Get the magnitude of a BaseUnit
+Get/set the magnitude of a Unit
 
-`magnitude(m) = 0`
 `magnitude(km) = 3`
+`magnitude(km) == magnitude(m, 3)`
 """
-magnitude(::Type{<:BaseUnit}) = 1
+magnitude(::Type{<:BaseUnit}) = 0
+magnitude(::Type{<:Combination{T,m}}) where {T,m} = m
+magnitude(u::UnionAll)= u.body.parameters[2]
+magnitude(::Type{<:Combination{T,_}}, m) where {T,_} = Combination{T,m}
+magnitude(::Type{T}, m) where T<:Exponent = Combination{Tuple{T},m}
+magnitude(::Type{SealedUnit{U,s}}, m) where {U,s} = SealedUnit{magnitude(U, m),s}
+magnitude(::Type{SealedUnit{U,s}}) where {U,s} = magnitude(U)
 
 """
 Compute the factor required to convert a Unit of any magnitude
@@ -81,7 +142,7 @@ to one with a magnitude of 1
 `basefactor(km) == 1000`
 `basefactor(m) == 1`
 """
-basefactor(::Type{T}) where T<:BaseUnit = Rational(10)^magnitude(T) # Rational allows 10^-1
+basefactor(::Type{T}) where T<:BaseUnit = (10//1)^magnitude(T) # Rational allows 10^-1
 basefactor(::Type{Exponent{d,D}}) where {d,D} = basefactor(D)^d
 
 """
@@ -106,8 +167,19 @@ end
 conversion_factor(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = begin
   pa, pb = (params(A), params(B))
   @assert length(pa) == length(pb) "$B is not equivelent to $A"
-  foldl((value, p)->value * conversion_factor(p[1], p[2]), zip(pa, pb), init=1)
+  f = foldl((value, p)->value * conversion_factor(p[1], p[2]), zip(pa, pb), init=1)
+  ma, mb = magnitude(A), magnitude(B)
+  ma == mb && return f
+  f * (10//1)^-(ma-mb)
 end
+# conversion_factor(mW, W) == 1000
+# conversion_factor(W, mW) == 1//1000
+# conversion_factor(kW, MW) == 1000
+# conversion_factor(W, W) == 1
+
+conversion_factor(A::Type{<:Unit},::Type{SealedUnit{U,s}}) where {U,s} = conversion_factor(A, U)*s
+conversion_factor(A::Type{SealedUnit{U,s}},B::Type{<:Unit}) where {U,s} = conversion_factor(U, B)/s
+conversion_factor(::Type{SealedUnit{A,a}},::Type{SealedUnit{B,b}}) where {A,B,a,b} = conversion_factor(A, B)*(b/a)
 
 "Convert to the most precise type possible"
 precise(n::Number) = n
@@ -121,39 +193,12 @@ simplify(::Type{Exponent{0,T}}) where T = Real
 simplify(::Type{T}) where T<:Exponent = T
 simplify(::Type{T}) where T<:BaseUnit = T
 
-abbr(::Type{Exponent{n,T}}) where {n,T} = begin
-  n == 1 && return abbr(T)
-  n == 0 && return string(abbr(T), '⁰')
-  n > 1 && return string(abbr(T), exponents[Int(n)])
-  string(abbr(T), '⁻', exponents[Int(abs(n))])
-end
-
-# abbr(Combination{Tuple{m²,hr^-1}}) == "m²/hr"
-# abbr(Combination{Tuple{m²,hr^1}}) == "m²·hr"
-abbr(::Type{C}) where C<:Combination = begin
-  str = sprint(abbr_params, params(C))
-  str[nextind(str, 0, 2):end]
-end
-
-to_real(n) = try convert(Integer, n) catch; convert(Float64, n) end
-to_real(u::Unit) = to_real(value(u))
-
-abbr_params(io, params) =
-  for T in params
-    d, ET = T.parameters
-    d == 0 && continue
-    print(io, d > 0 ? '·' : '/', abbr(ET))
-    d = abs(d)
-    d > 1 && print(io, exponents[d])
-  end
-
-# handle units with custom printing
 Base.show(io::IO, c::Combination) = begin
-  p = params(typeof(c))
-  first, rest = (p[1], p[2:end])
-  show(io, simplify(first)(value(c)))
-  abbr_params(io, rest)
+  write(io, seperate(c.value), abbr(typeof(c)))
+  nothing
 end
+
+Base.round(u::Unit) = typeof(u)(round(u.value))
 
 "Formats long numbers with commas seperating it into chunks"
 seperate(n::Number; kwargs...) = seperate(string(convert(isinteger(n) ? Int : Float64, n)), kwargs...)
@@ -198,11 +243,14 @@ abstract_unit(m) == Length
 ```
 """
 abstract_unit(::Type{Exponent{n,T}}) where {n,T} = Exponent{n,<:abstract_unit(T)}
-abstract_unit(::Type{C}) where C<:Combination = Combination{<:Tuple{map(abstract_unit, params(C))...}}
-abstract_unit(::Type{T}) where T<:BaseUnit =
+abstract_unit(::Type{<:Combination{T,n}}) where {T,n} = Combination{<:Tuple{map(abstract_unit, T.parameters)...}, n}
+abstract_unit(U::Type{SIUnit{T}}) where T = U
+abstract_unit(::Type{T}) where T<:BaseUnit = begin
   supertype(T) == BaseUnit ? abstract_type(T) : abstract_unit(supertype(T))
+end
+abstract_unit(U::UnionAll) = U
 # abstract_unit(m²) == Exponent{2,<:Length}
-# abstract_unit(m/s) == Combination{<:Tuple{Exponent{1,<:Length},Exponent{-1,<:Time}}}
+# abstract_unit(m/s) == Combination{<:Tuple{Exponent{1,<:Length},Exponent{-1,<:Time}},0}
 # abstract_unit(m) == Length
 # abstract_unit(s) == Time
 
@@ -215,6 +263,7 @@ baseunit(m) == Length
 ```
 """
 baseunit(u::Unit) = baseunit(typeof(u))
+baseunit(::Type{SIUnit{T}}) where T = SIUnit{T}
 baseunit(::Type{T}) where T<:BaseUnit = supertype(T) == BaseUnit ? abstract_type(T) : baseunit(supertype(T))
 baseunit(::Type{T}) where T<:Exponent = begin
   if T isa UnionAll
@@ -226,9 +275,9 @@ end
 # baseunit(Length^1) == Length
 # baseunit(Meter{0}^1) == Length
 baseunit(::Type{C}) where C<:Combination = begin
-  Combination{Tuple{map(T->Exponent{exponent(T), baseunit(T)}, params(C))...}}
+  Combination{Tuple{map(T->Exponent{exponent(T), baseunit(T)}, params(C))...}, magnitude(C)}
 end
-# baseunit(m/s) == Combination{Tuple{Exponent{1,Length},Exponent{-1,Time}}}
+# baseunit(m/s) == Combination{Tuple{Exponent{1,Length},Exponent{-1,Time}}, 0}
 
 "Convert to a UnionAll if its a parametric DataType"
 abstract_type(T::UnionAll) = T
@@ -241,6 +290,7 @@ Base.convert(::Type{U}, n::Real) where U<:Unit = U(n)
 # convert(km, 1000m) == 1km
 # convert(day^-1, 1/year) == (1/365.2425)day^-1
 Base.convert(::Type{B}, a::A) where {A<:Unit,B<:Unit} = B(value(a) * conversion_factor(B, A))
+Base.convert(::Type{Combination}, b::Unit) = tocombination(typeof(b))(b.value)
 
 # 2cm == Meter{-2}(2)
 Base.:*(n::Real, ::Type{T}) where T<:Unit = T(n)
@@ -260,12 +310,12 @@ end
 Base.:-(a::T) where T<:Unit = T(-(value(a)))
 
 # 1/m == (m^-1)(1)
-Base.:/(a::Number, B::Type{<:Unit}) = simplify(Combination{Tuple{inv(B)}})(a)
+Base.:/(a::Number, B::Type{<:Unit}) = simplify(Combination{Tuple{inv(B)},0})(a)
 
 toexponent(::Type{E}) where E<:Exponent = unionall(E)
 toexponent(::Type{D}) where D<:BaseUnit = unionall(Exponent{1,D})
 tocombination(::Type{A}) where A<:Combination = A
-tocombination(::Type{A}) where A<:Unit = Combination{Tuple{toexponent(A)}}
+tocombination(::Type{A}) where A<:Unit = Combination{Tuple{toexponent(A)},0}
 Base.inv(::Type{D}) where D<:BaseUnit = unionall(Exponent{-1,D})
 Base.inv(::Type{E}) where E<:Exponent =
   if E isa UnionAll
@@ -275,7 +325,7 @@ Base.inv(::Type{E}) where E<:Exponent =
     d, T = E.parameters
     Exponent{-d, T}
   end
-# Exponent{1,Time{1//1}} <: Exponent{1,<:Time}
+# Exponent{1,Second{1//1}} <: Exponent{1,<:Time}
 unionall(E::Type{Exponent{n,T}}) where {n,T} = (T isa DataType && T.abstract) || T isa UnionAll ? Exponent{n,<:T} : E
 unionall(U::UnionAll) = U
 
@@ -308,7 +358,7 @@ magnitude(::Type{Meter{m}}) where m = m
 Base.promote_rule(::Type{Meter{m1}},::Type{Meter{m2}}) where {m1,m2} = Meter{min(m1,m2)}
 # promote(1mm, 2m) == (1mm, 2000mm)
 
-struct Time{factor} <: BaseUnit value::Real end
+struct Second{factor} <: Time value::Real end
 
 const time_factors = Dict{Rational,Symbol}(60 => :minute,
                                            3600 => :hr,
@@ -316,12 +366,13 @@ const time_factors = Dict{Rational,Symbol}(60 => :minute,
                                            604800 => :week,
                                            2629746 => :month,
                                            31556952 => :year)
-# abbr(Time{-1000_000_000_000//1}) == "ps"
-abbr(::Type{Time{f}}) where f =
+
+# abbr(Second{-1000_000_000_000//1}) == "ps"
+abbr(::Type{Second{f}}) where f =
   String(get(time_factors, f, string(get(prefix, -round(Int, log(10, abs(f))), ""), 's')))
-basefactor(::Type{Time{f}}) where f = f
+basefactor(::Type{Second{f}}) where f = f
 # promote(1s, 1hr) == (1s, 3600s)
-Base.promote_rule(::Type{Time{f1}},::Type{Time{f2}}) where {f1,f2} = Time{min(f1,f2)}
+Base.promote_rule(::Type{Second{f1}},::Type{Second{f2}}) where {f1,f2} = Second{min(f1,f2)}
 
 struct Degree <: Angle value::Real end
 struct Radian <: Angle value::Real end
@@ -375,24 +426,22 @@ for λ ∈ (:<, :>, :(==), :isless)
   end
 end
 
-params(U::UnionAll) = U.body.parameters[1].ub.parameters
-params(::Type{Combination{T}}) where T<:Tuple = T.parameters
-params(::Type{E}) where E<:Exponent = Core.svec(E)
-params(::Type{D}) where D<:BaseUnit = Core.svec(Exponent{1,D})
-# simplify(Combination{Tuple{m^2,s^0}}) == m^2
-simplify(::Type{Combination{Tuple{T}}}) where T = simplify(T)
+params(U::UnionAll) = sort_params(U.body.parameters[1].ub.parameters)
+params(::Type{Combination{T,m}}) where {T<:Tuple,m} = sort_params(T.parameters)
+params(::Type{E}) where E<:Exponent = sort_params(Core.svec(E))
+params(::Type{D}) where D<:BaseUnit = sort_params(Core.svec(Exponent{1,D}))
+# simplify(Combination{Tuple{m^2,s^0},0}) == m^2
+simplify(::Type{Combination{Tuple{T}, m}}) where {T,m} = simplify(T)
 simplify(::Type{C}) where C<:Combination = begin
   p = collect(Iterators.filter(E->exponent(E) != 0, params(C)))
   length(p) == 0 && return Real
   length(p) == 1 && return simplify(p[1])
-  Combination{Tuple{p...}}
+  Combination{Tuple{p...}, magnitude(C)}
 end
 
-Base.convert(::Type{Combination}, x::Exponent) = Combination{Tuple{typeof(x)}}(x.value)
-Base.convert(::Type{Combination}, x::BaseUnit) = Combination{Tuple{Exponent{1,typeof(x)}}}(x.value)
 # promote(1m/s, 9km/hr) == (1m/s, 2.5m/s)
 Base.promote_rule(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = begin
-  Combination{Tuple{map(promote_type, params(A), params(B))...}}
+  Combination{Tuple{map(promote_type, params(A), params(B))...}, min(magnitude(A), magnitude(B))}
 end
 # (60m/s) / (1°/minute) == 3600m/°
 # (60m/s) / (1/minute) == 3600m
@@ -418,7 +467,6 @@ for op in (:*, :/)
     T($op(value_a, value_b))
   end
 end
-
 # 1m/s == (m/s)(1)
 # 1m/s^2 == (m/s^2)(1)
 # 1m²/s^2 == (m²/s^2)(1)
@@ -431,7 +479,7 @@ end
 # 1minute * (1m/s) == 60m
 # 3g * (1000m/kg) == 3m
 # 1000_000_000mm³ * (2.5ton/m³) == 2.5ton
-# Combination{Tuple{s^1}}(12) * Combination{Tuple{km^1, minute^-1}}(1) == (1//5)km
+# Combination{Tuple{s^1},0}(12) * Combination{Tuple{km^1, minute^-1},0}(1) == (1//5)km
 # 1mm² * 2cm^1 == 20mm³
 # 2m²/1m² == 2
 # 1s/5s == 1//5
@@ -442,11 +490,11 @@ end
 # (2m^4)/(2m²) == 1m²
 # (1.1s^2)/1m² == (1.1s^2)/m²
 # 1kg/m * 1cm == 0.01kg
-# m/s == Combination{Tuple{m^1,s^-1}}
-# s/m² == Combination{Tuple{s^1,m^-2}}
-# s^2/m² == Combination{Tuple{s^2,m^-2}}
-# Combination{Tuple{s^1}} * Combination{Tuple{s^2}} == s^3
-# Combination{Tuple{s^2}}-Combination{Tuple{m^2}} == Combination{Tuple{s^2,m^-2}}
+# m/s == Combination{Tuple{m^1,s^-1},0}
+# s/m² == Combination{Tuple{s^1,m^-2},0}
+# s^2/m² == Combination{Tuple{s^2,m^-2},0}
+# Combination{Tuple{s^1},0} * Combination{Tuple{s^2},0} == s^3
+# Combination{Tuple{s^2},0}-Combination{Tuple{m^2},0} == Combination{Tuple{s^2,m^-2},0}
 for op in (:+, :-, :*, :/)
   @eval Base.$op(::Type{A}, ::Type{B}) where {A<:Unit, B<:Unit} = $op(tocombination(A), tocombination(B))
   @eval Base.$op(::Type{A}, ::Type{B}) where {A<:Combination, B<:Combination} = begin
@@ -465,26 +513,26 @@ for op in (:+, :-, :*, :/)
         d2,TB = parameters(params_b[ib])
         d = $(op == :* ? (+) : (-))(d1, d2)
         if !isabstract(TA) && !isabstract(TB)
-          Exponent{d, promote_type(TA, TB)}
+          Exponent{d, promote_type(TA,TB)}
         else
           Exponent{d, <:ub(TA)}
         end
       end
     end
-    combine(units)
+    combine(units, magnitude(A))
   end
   @eval Base.$op(a::A, ::Type{B}) where {A<:Unit,B<:Unit} = $op(A,B)(a.value)
   @eval Base.$op(::Type{A}, b::B) where {A<:Unit,B<:Unit} = $op(A,B)(b.value)
 end
 
-combine(types) = begin
-  p = collect(Iterators.filter(E->exponent(E) != 0, types))
+combine(types, m) = begin
+  p = sort_params(collect(Iterators.filter(E->exponent(E) != 0, types)))
   length(p) == 0 && return Real
-  length(p) == 1 && return simplify(p[1])
+  length(p) == 1 && return simplify(magnitude(p[1], m))
   if any(isabstract, p)
-    Combination{<:Tuple{p...}}
+    Combination{<:Tuple{p...}, m}
   else
-    Combination{Tuple{p...}}
+    Combination{Tuple{p...}, m}
   end
 end
 
@@ -514,13 +562,13 @@ end
 
 # convert(s, 1ns) == 1e-9s
 for (factor,name) in time_factors
-  @eval @export $name = Time{$factor}
+  @eval @export $name = Second{$factor}
 end
 for mag in (-3, -6, -9, -12)
   name = Symbol(get(prefix, mag, ""), 's')
-  @eval @export $name = Time{$(Rational(10)^mag)}
+  @eval @export $name = Second{$((10//1)^mag)}
 end
-@export s = Time{1//1}
+@export s = Second{1//1}
 
 # define mm, km etc...
 for mag in (3, 0, -2, -3, -6, -9)
@@ -543,16 +591,30 @@ end
 @export ° = Degree
 @export rad = Radian
 
-struct Ampere <: BaseUnit value::Real end
+struct Ampere <: Current value::Real end
 abbr(::Type{Ampere}) = "A"
 
 @export Amp = Ampere
 @export Joule = kg*m²/s^2
+@export J = Joule
+@export MJ = magnitude(J, 6)
 @export Newton = kg*m/s^2
-@export Watt = Joule/s
+@export KN = magnitude(Newton, 3)
+@export Watt = J/s
 @export W = Watt
-@export kW = 1000W
-@export kWh = kW*1hr
+@export mW = magnitude(W, -3)
+@export kW = magnitude(W, 3)
+@export MW = magnitude(W, 6)
+@export Wh = scale(J, 3600)
+@export kWh = magnitude(Wh, 3)
+@export MWh = magnitude(Wh, 6)
+
+abbr(::Type{Wh}) = "Wh"
+abbr(::Type{kWh}) = "kWh"
+abbr(::Type{MWh}) = "MWh"
+abbr(::Type{J}) = "J"
+abbr(::Type{MJ}) = "MJ"
+
 @export Pascal = Newton/m²
 @export Hertz = inv(s)
 @export Coulomb = Amp*s
