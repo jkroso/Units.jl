@@ -1,5 +1,6 @@
 @use "." conversion_factor abbr abstract_unit baseunit simplify Combination Exponent Meter Gram Second Degree exports...
-@use "github.com/jkroso/Rutherford.jl/test.jl" @test
+@use "github.com/jkroso/Rutherford.jl/test.jl" @test testset
+@use "./Money.jl" Wage AUD USD
 
 @test abbr(Combination{Tuple{m²,hr^-1},0}) == "m²/hr"
 @test abbr(Combination{Tuple{m²,hr^1},0}) == "m²·hr"
@@ -78,3 +79,11 @@
 @test m/s <: Speed
 @test m/s^2 <: Acceleration
 @test convert(s, 1ns) == 1e-9s
+
+testset("Money") do
+  @test Wage isa UnionAll
+  @test AUD/hr <: Wage
+  @test 1.5AUD/hr isa Wage
+  @test string(1AUD) == "1.00 AUD"
+  @test string(1.5AUD/hr) == "1.50 AUD/hr"
+end

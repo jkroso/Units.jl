@@ -9,8 +9,7 @@ end
 
 const symbols = let
   file = joinpath(@__DIR__(), "symbols.json")
-  ispath(file) || download("https://api.exchangerate.host/symbols", file)
-  data = parse(MIME("application/json"), read(file))["symbols"]
+  data = parse(MIME("application/json"), read(file))
   Dict{Symbol,Symbol}((Symbol(k)=>Symbol(v["symbol"]) for (k,v) ∈ data)...)
 end
 

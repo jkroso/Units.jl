@@ -209,6 +209,19 @@ seperate(str::String, sep = ",", k = 3) = begin
 end
 
 Base.show(io::IO, t::Unit) = (write(io, seperate(t.value), abbr(typeof(t))); nothing)
+Base.show(io::IO, t::Combination) = begin
+  T = typeof(t)
+  p, m = parameters(T)
+  if m != 0
+    write(io, seperate(t.value), get(prefix, m, "e$m"), abbr(typeof(t)))
+  else
+    units = [p.parameters[i] for i in 1:length(p.parameters)]
+    first, rest = units[1], units[2:end]
+    show(io, simplify(first)(value(t)))
+    abbr_params(io, rest)
+  end
+  nothing
+end
 Base.show(io::IO, e::Exponent{d,U}) where {d,U} = begin
   write(io, seperate(e.value))
   if hasmethod(abbr, Tuple{Type{typeof(e)}})
