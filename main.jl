@@ -1,3 +1,44 @@
+const Units = @__MODULE__()
+macro defunit(typ, short_name)
+  if typ isa Symbol
+    type_name = typ
+    super = :($Units.BaseUnit)
+  else
+    type_name = typ.args[1]
+    super = esc(typ.args[2])
+  end
+  T = esc(type_name)
+  if Meta.isexpr(short_name, :call, 3) && short_name.args[1] == :*
+    @assert Meta.isexpr(short_name.args[2], :hcat) || Meta.isexpr(short_name.args[2], :vect)
+    abbrev = short_name.args[3]
+    magnitudes = short_name.args[2].args
+  else
+    abbrev = short_name
+    magnitudes = Any[]
+  end
+  magnitudes = map(magnitudes) do m
+    for (n, sym) in prefix
+      sym == m && return :(const $(esc(Symbol(m, abbrev))) = $T{$n})
+    end
+    error("unknown prefix $m")
+  end
+  quote
+    Base.@__doc__ struct $T{magnitude} <: $super value::Number end
+    $Units.magnitude(::Type{$T{m}}) where m = m
+    $Units.abbr(::Type{$T{m}}) where m = string(get(prefix, m, ""), $(string(abbrev)))
+    Base.promote_rule(::Type{$T{m1}},::Type{$T{m2}}) where {m1,m2} = $T{min(m1,m2)}
+    const $(esc(abbrev)) = $T{0}
+    $(magnitudes...)
+  end
+end
+
+@eval macro $:export(e)
+  quote
+    export $(esc(e.args[1]))
+    $(esc(Expr(:const, e)))
+  end
+end
+
 # map magnitudes to their standard name
 const prefix = Dict(1 => :da,
                     2 => :h,
@@ -325,10 +366,9 @@ unionall(U::UnionAll) = U
 Base.promote_rule(::Type{Exponent{d,TA}}, ::Type{Exponent{d,TB}}) where {d,TA,TB} =
   Exponent{d,promote_type(TA,TB)}
 
-struct Meter{magnitude} <: Length value::Real end
-abbr(M::Type{<:Meter}) = string(get(prefix, magnitude(M), ""), 'm')
-magnitude(::Type{Meter{m}}) where m = m
-Base.promote_rule(::Type{Meter{m1}},::Type{Meter{m2}}) where {m1,m2} = Meter{min(m1,m2)}
+@defunit Meter <: Length [μ n m c k]m
+@defunit Gram <: Mass [k]g
+abbr(::Type{Gram{6}}) = "ton"
 
 struct Second{factor} <: Time value::Real end
 const time_factors = Dict{Rational,Symbol}(60 => :minute,
@@ -369,12 +409,6 @@ baseoffset(::Type{Celsius}) = rationalize(273.15)
 Base.promote_rule(::Type{<:Temperature}, ::Type{<:Temperature}) = Kelvin
 Base.convert(::Type{Kelvin}, t::T) where T<:Union{Celsius,Fahrenheit} =
   Kelvin((precise(t.value) + baseoffset(T)) * basefactor(T))
-
-struct Gram{m} <: Mass value::Real end
-magnitude(::Type{Gram{m}}) where m = m
-abbr(::Type{T}) where T<:Gram = string(get(prefix, magnitude(T), ""), "g")
-abbr(::Type{Gram{6}}) = "ton"
-Base.promote_rule(::Type{Gram{a}}, ::Type{Gram{b}}) where {a,b} = Gram{min(a,b)}
 
 for λ ∈ (:<, :>, :(==), :isless)
   @eval begin
@@ -460,13 +494,6 @@ ub(D::UnionAll) = D.body
 isabstract(::Union{TypeVar,UnionAll}) = true
 isabstract(D::DataType) = D.hasfreetypevars
 
-@eval macro $:export(e)
-  quote
-    export $(esc(e.args[1]))
-    $(esc(Expr(:const, e)))
-  end
-end
-
 @export Area = Length^2
 @export Volume = Length^3
 @export Pressure = Mass/Area
@@ -536,40 +563,6 @@ abbr(::Type{MJ}) = "MJ"
 @export V = Volt
 @export Ohm = Volt/Amp
 @export gravity = 9.80665m/s^2 # http://physics.nist.gov/cgi-bin/cuu/Value?gn
-
-const Units = @__MODULE__()
-macro defunit(typ, short_name)
-  if typ isa Symbol
-    type_name = typ
-    super = :($Units.BaseUnit)
-  else
-    type_name = typ.args[1]
-    super = esc(typ.args[2])
-  end
-  T = esc(type_name)
-  if Meta.isexpr(short_name, :call, 3) && short_name.args[1] == :*
-    @assert Meta.isexpr(short_name.args[2], :hcat)
-    abbrev = short_name.args[3]
-    magnitudes = short_name.args[2].args
-  else
-    abbrev = short_name
-    magnitudes = Any[]
-  end
-  magnitudes = map(magnitudes) do m
-    for (n, sym) in prefix
-      sym == m && return :(const $(esc(Symbol(m, abbrev))) = $T{$n})
-    end
-    error("unknown prefix $m")
-  end
-  quote
-    Base.@__doc__ struct $T{magnitude} <: $super value::Number end
-    $Units.magnitude(::Type{$T{m}}) where m = m
-    $Units.abbr(::Type{$T{m}}) where m = string(get(prefix, m, ""), $(string(abbrev)))
-    Base.promote_rule(::Type{$T{m1}},::Type{$T{m2}}) where {m1,m2} = $T{min(m1,m2)}
-    const $(esc(abbrev)) = $T{0}
-    $(magnitudes...)
-  end
-end
 
 abstract type Data <: BaseUnit end
 @defunit Byte <: Data [k M G T]b
