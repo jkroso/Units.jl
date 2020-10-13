@@ -1,4 +1,4 @@
-@use "." conversion_factor abbr abstract_unit baseunit simplify Combination Exponent Meter Gram Second Degree exports...
+@use "." conversion_factor abbr abstract_unit baseunit simplify Combination Exponent Meter Gram Second Degree kb bit kbit exports...
 @use "github.com/jkroso/Rutherford.jl/test.jl" @test testset
 @use "./Money.jl" Wage AUD USD
 
@@ -86,4 +86,9 @@ testset("Money") do
   @test 1.5AUD/hr isa Wage
   @test string(1AUD) == "1.00 AUD"
   @test string(1.5AUD/hr) == "1.50 AUD/hr"
+end
+
+testset("Data") do
+  @test convert(kb, 8000bit) == 1kb
+  @test convert(kbit, 1kb) == 8kbit
 end

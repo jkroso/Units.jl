@@ -536,3 +536,43 @@ abbr(::Type{MJ}) = "MJ"
 @export V = Volt
 @export Ohm = Volt/Amp
 @export gravity = 9.80665m/s^2 # http://physics.nist.gov/cgi-bin/cuu/Value?gn
+
+const Units = @__MODULE__()
+macro defunit(typ, short_name)
+  if typ isa Symbol
+    type_name = typ
+    super = :($Units.BaseUnit)
+  else
+    type_name = typ.args[1]
+    super = esc(typ.args[2])
+  end
+  T = esc(type_name)
+  if Meta.isexpr(short_name, :call, 3) && short_name.args[1] == :*
+    @assert Meta.isexpr(short_name.args[2], :hcat)
+    abbrev = short_name.args[3]
+    magnitudes = short_name.args[2].args
+  else
+    abbrev = short_name
+    magnitudes = Any[]
+  end
+  magnitudes = map(magnitudes) do m
+    for (n, sym) in prefix
+      sym == m && return :(const $(esc(Symbol(m, abbrev))) = $T{$n})
+    end
+    error("unknown prefix $m")
+  end
+  quote
+    Base.@__doc__ struct $T{magnitude} <: $super value::Number end
+    $Units.magnitude(::Type{$T{m}}) where m = m
+    $Units.abbr(::Type{$T{m}}) where m = string(get(prefix, m, ""), $(string(abbrev)))
+    Base.promote_rule(::Type{$T{m1}},::Type{$T{m2}}) where {m1,m2} = $T{min(m1,m2)}
+    const $(esc(abbrev)) = $T{0}
+    $(magnitudes...)
+  end
+end
+
+abstract type Data <: BaseUnit end
+@defunit Byte <: Data [k M G T]b
+@defunit Bit <: Data [k M G T]bit
+Base.convert(B::Type{Bit{m}}, b::Byte) where m = B(8*convert(Real, b)/basefactor(B))
+Base.convert(B::Type{Byte{m}}, b::Bit) where m = B((convert(Real, b)/8)/basefactor(B))
