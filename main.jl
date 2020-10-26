@@ -1,3 +1,5 @@
+@use "github.com/jkroso/Prospects.jl" ismethod
+
 const Units = @__MODULE__()
 macro defunit(typ, short_name)
   if typ isa Symbol
@@ -150,7 +152,7 @@ Base.promote_rule(::Type{Percent}, ::Type{B}) where B<:Real = Rational
 Returns the shorthand notation for a given unit type
 """
 function abbr end
-abbr(::Type{SealedUnit{U,s}}) where {U,s} = "$(abbr(U)) × $(scale(S))"
+abbr(::Type{SealedUnit{U,s}}) where {U,s} = s == 1 ? abbr(U) : "$(abbr(U)) × $s"
 abbr(::Type{Exponent{n,T}}) where {n,T} = begin
   n == 1 && return abbr(T)
   n == 0 && return string(abbr(T), '⁰')
@@ -158,8 +160,14 @@ abbr(::Type{Exponent{n,T}}) where {n,T} = begin
   string(abbr(T), '⁻', exponents[Int(abs(n))])
 end
 abbr(::Type{C}) where C<:Combination = begin
-  str = sprint(abbr_params, params(C))
-  str[nextind(str, 0, 2):end]
+  p, m = parameters(C)
+  if m == 0
+    units = [p.parameters[i] for i in 1:length(p.parameters)]
+    str = sprint(abbr_params, units)
+    str[nextind(str, 0, 2):end]
+  else
+    string(get(prefix, m, "e$m")) * abbr(magnitude(C, 0))
+  end
 end
 abbr_params(io, params) =
   for T in params
@@ -253,14 +261,13 @@ end
 Base.show(io::IO, t::Unit) = (write(io, seperate(t.value), abbr(typeof(t))); nothing)
 Base.show(io::IO, t::Combination) = begin
   T = typeof(t)
-  p, m = parameters(T)
-  if m != 0
-    write(io, seperate(t.value), get(prefix, m, "e$m"), abbr(typeof(t)))
+  p, m = T.parameters
+  if m != 0 || ismethod(abbr, (T,))
+    write(io, seperate(t.value), abbr(T))
   else
     units = [p.parameters[i] for i in 1:length(p.parameters)]
-    first, rest = units[1], units[2:end]
-    show(io, simplify(first)(value(t)))
-    abbr_params(io, rest)
+    show(io, simplify(units[1])(value(t)))
+    abbr_params(io, units[2:end])
   end
   nothing
 end
@@ -536,7 +543,7 @@ end
 struct Ampere <: Current value::Real end
 abbr(::Type{Ampere}) = "A"
 
-@export Amp = Ampere
+@export A = Ampere
 @export Joule = kg*m²/s^2
 @export J = Joule
 @export MJ = magnitude(J, 6)
@@ -559,11 +566,14 @@ abbr(::Type{MJ}) = "MJ"
 
 @export Pascal = Newton/m²
 @export Hertz = inv(s)
-@export Coulomb = Amp*s
+@export Coulomb = A*s
 @export Volt = Joule/Coulomb
 @export V = Volt
-@export Ohm = Volt/Amp
+@export Ohm = Volt/A
 @export gravity = 9.80665m/s^2 # http://physics.nist.gov/cgi-bin/cuu/Value?gn
+
+abbr(::Type{W}) = "Watt"
+abbr(::Type{V}) = "V"
 
 abstract type Data <: BaseUnit end
 @defunit Byte <: Data [k M G T]b
