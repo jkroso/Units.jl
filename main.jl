@@ -121,6 +121,7 @@ struct SealedUnit{U<:Combination, scale} <: BaseUnit
   value::Number
 end
 
+seal(u::U) where U<:Unit = SealedUnit{tocombination(U),1}(u.value)
 scale(::Type{SealedUnit{U,s}}) where {U,s} = s
 scale(::Type{SealedUnit{U,s}}, s2) where {U,s} = SealedUnit{U, s2}
 scale(::Type{U}, s) where U<:Combination = SealedUnit{U, s}
