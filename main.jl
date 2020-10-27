@@ -572,7 +572,7 @@ abbr(::Type{MJ}) = "MJ"
 @export Ohm = Volt/A
 @export gravity = 9.80665m/s^2 # http://physics.nist.gov/cgi-bin/cuu/Value?gn
 
-abbr(::Type{W}) = "Watt"
+abbr(::Type{W}) = "W"
 abbr(::Type{V}) = "V"
 
 abstract type Data <: BaseUnit end
