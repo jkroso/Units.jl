@@ -1,3 +1,4 @@
+@use "github.com/JuliaLang/Downloads.jl" download
 @use "github.com/jkroso/parse-json.jl"
 @use "." abbr basefactor BaseUnit seperate exports...
 import Dates: unix2datetime, today
