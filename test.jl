@@ -79,6 +79,12 @@
 @test m/s <: Speed
 @test m/s^2 <: Acceleration
 @test convert(s, 1ns) == 1e-9s
+@test 1m ÷ 49mm == 20
+@test 1m % 49mm == 20mm
+@test round(900.9mm) == 901mm
+@test floor(900.1mm) == 900mm
+@test ceil(900.1mm) == 901mm
+@test round(m, 900mm) == 1m
 
 testset("Money") do
   @test Wage isa UnionAll

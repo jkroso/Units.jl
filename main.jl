@@ -148,6 +148,16 @@ Base.convert(::Type{Percent}, n::Real) = Percent(100n)
 Base.convert(::Type{Percent}, n::Percent) = n
 Base.promote_rule(::Type{Percent}, ::Type{B}) where B<:Real = Rational
 
+Base.div(a::Unit, b::Unit) = Int(floor(a/b))
+Base.rem(a::Unit, b::Unit) = a-(floor(a/b)*b)
+Base.floor(a::Unit) = typeof(a)(floor(a.value))
+Base.ceil(a::Unit) = typeof(a)(ceil(a.value))
+Base.round(A::Type{<:Unit}, a::Unit) = round(convert(A, a))
+Base.abs(::Type{Exponent{n,T}}) where {n,T} = Exponent{abs(n), T}
+Base.exponent(::Type{T}) where T<:Unit = 1
+Base.exponent(::Type{E}) where E<:Exponent = parameters(E)[1]
+Base.round(u::Unit) = typeof(u)(round(u.value))
+
 """
 Returns the shorthand notation for a given unit type
 """
@@ -283,11 +293,6 @@ Base.show(io::IO, e::Exponent{d,U}) where {d,U} = begin
     d > 1 && write(io, exponents[Int(d)])
   end
 end
-
-Base.abs(::Type{Exponent{n,T}}) where {n,T} = Exponent{abs(n), T}
-Base.exponent(::Type{T}) where T<:Unit = 1
-Base.exponent(::Type{E}) where E<:Exponent = parameters(E)[1]
-Base.round(u::Unit) = typeof(u)(round(u.value))
 
 """
 Get a units abstract type
