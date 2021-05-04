@@ -520,7 +520,8 @@ end
 
 for mag in (-3, -6, -9, -12)
   name = Symbol(get(prefix, mag, ""), 's')
-  @eval @export $name = Second{$((10//1)^mag)}
+  # be nice to lesser computers
+  @eval @export $name = Second{$(Base.Sys.WORD_SIZE < 64 && mag == -12 ? 1//1000000000000 : (10//1)^mag)}
 end
 @export s = Second{1//1}
 
