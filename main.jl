@@ -147,6 +147,7 @@ Base.convert(::Type{T}, p::Percent) where T <: Real = p isa T ? p : convert(T, p
 Base.convert(::Type{Percent}, n::Real) = Percent(100n)
 Base.convert(::Type{Percent}, n::Percent) = n
 Base.promote_rule(::Type{Percent}, ::Type{B}) where B<:Real = Rational
+Base.round(u::Percent; kwargs...) = Percent(round(u.value; kwargs...))
 
 Base.div(a::Unit, b::Unit) = Int(floor(a/b))
 Base.rem(a::Unit, b::Unit) = a-(floor(a/b)*b)

@@ -1,4 +1,4 @@
-@use "." conversion_factor abbr abstract_unit baseunit simplify Combination Exponent Meter Gram Second Degree kb bit kbit exports...
+@use "." conversion_factor abbr abstract_unit baseunit simplify Combination Exponent Meter Gram Second Degree kb bit kbit Percent exports...
 @use "github.com/jkroso/Rutherford.jl/test.jl" @test testset
 @use "./Money.jl" Wage AUD USD
 
@@ -86,6 +86,7 @@
 @test ceil(900.1mm) == 901mm
 @test round(m, 900mm) == 1m
 @test round(9.6742mm, digits=2) == 9.67mm
+@test round(Percent(10.547), digits=2) == Percent(10.55)
 
 testset("Money") do
   @test Wage isa UnionAll
