@@ -85,6 +85,7 @@
 @test floor(900.1mm) == 900mm
 @test ceil(900.1mm) == 901mm
 @test round(m, 900mm) == 1m
+@test round(9.6742mm, digits=2) == 9.67mm
 
 testset("Money") do
   @test Wage isa UnionAll

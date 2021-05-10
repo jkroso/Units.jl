@@ -156,7 +156,7 @@ Base.round(A::Type{<:Unit}, a::Unit) = round(convert(A, a))
 Base.abs(::Type{Exponent{n,T}}) where {n,T} = Exponent{abs(n), T}
 Base.exponent(::Type{T}) where T<:Unit = 1
 Base.exponent(::Type{E}) where E<:Exponent = parameters(E)[1]
-Base.round(u::Unit) = typeof(u)(round(u.value))
+Base.round(u::Unit; kwargs...) = typeof(u)(round(u.value; kwargs...))
 
 """
 Returns the shorthand notation for a given unit type
