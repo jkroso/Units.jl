@@ -572,6 +572,11 @@ abbr(::Type{J}) = "J"
 abbr(::Type{MJ}) = "MJ"
 
 @export Pascal = Newton/m²
+@export bar = scale(Pascal, 100_000)
+@export mbar = magnitude(bar, -3)
+abbr(::Type{bar}) = "bar"
+abbr(::Type{mbar}) = "mbar"
+
 @export Hertz = inv(s)
 @export Coulomb = A*s
 @export Volt = Joule/Coulomb
