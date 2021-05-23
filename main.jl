@@ -128,27 +128,6 @@ scale(::Type{SealedUnit{U,s}}) where {U,s} = s
 scale(::Type{SealedUnit{U,s}}, s2) where {U,s} = SealedUnit{U, s2}
 scale(::Type{U}, s) where U<:Combination = SealedUnit{U, s}
 
-"Represents percentages like 15%"
-struct Percent <: Number value::Rational end
-Percent(n::AbstractFloat) = Percent(rationalize(n))
-Base.:-(a::Number, p::Percent) = a/(1 + p.value/100)
-Base.:+(a::Number, p::Percent) = a*(1 + p.value/100)
-Base.:*(a::Percent, b::Percent) = Percent((a.value/100) * (b.value/100))
-Base.:+(a::Percent, b::Percent) = Percent(a.value + b.value)
-Base.:-(a::Percent, b::Percent) = Percent(a.value - b.value)
-for op in (:*, :/)
-  @eval Base.$op(a::Number, b::Percent) = $op(a, b.value/100)
-  @eval Base.$op(a::Percent, b::Number) = $op(a.value/100, b)
-end
-Base.:/(a::Percent, b::Percent) = Percent(a.value / b.value)
-(p::Percent)(n::Real) = precise(n) * (p.value/100)
-Base.show(io::IO, p::Percent) = print(io, Float64(p.value), '%')
-Base.convert(::Type{T}, p::Percent) where T <: Real = p isa T ? p : convert(T, p.value)
-Base.convert(::Type{Percent}, n::Real) = Percent(100n)
-Base.convert(::Type{Percent}, n::Percent) = n
-Base.promote_rule(::Type{Percent}, ::Type{B}) where B<:Real = Rational
-Base.round(u::Percent; kwargs...) = Percent(round(u.value; kwargs...))
-
 Base.div(a::Unit, b::Unit) = Int(floor(a/b))
 Base.rem(a::Unit, b::Unit) = a-(floor(a/b)*b)
 Base.floor(a::Unit) = typeof(a)(floor(a.value))
@@ -592,3 +571,37 @@ abstract type Data <: BaseUnit end
 @defunit Bit <: Data [k M G T]bit
 Base.convert(B::Type{Bit{m}}, b::Byte) where m = B(8*convert(Real, b)/basefactor(B))
 Base.convert(B::Type{Byte{m}}, b::Bit) where m = B((convert(Real, b)/8)/basefactor(B))
+
+"Represents scaled numbers like percent, and ppm"
+abstract type Magnitude{m} <: Number end
+magnitude(::Magnitude{m}) where m = m
+value(m::Magnitude) = magnitude(m)m.value
+
+"Represents percentages like 15%"
+struct Percent <: Magnitude{1//100} value::Real end
+Percent(n::AbstractFloat) = Percent(rationalize(n))
+struct ppm <: Magnitude{1//1000_000} value::Real end
+struct ppb <: Magnitude{1//1000_000_000} value::Real end
+struct ppt <: Magnitude{1//1000_000_000_000} value::Real end
+
+Base.:*(a::Real, ::Type{M}) where M<:Magnitude = M(a)
+Base.:*(a::M, b::M) where M<:Magnitude = M(value(a) * value(b))
+Base.:+(a::M, b::M) where M<:Magnitude = M(a.value + b.value)
+Base.:-(a::M, b::M) where M<:Magnitude = M(a.value - b.value)
+for op in (:*, :/)
+  @eval Base.$op(a::Real, b::Magnitude) = $op(a, value(b))
+  @eval Base.$op(a::Magnitude, b::Real) = $op(value(a), b)
+end
+Base.:/(a::Magnitude, b::Magnitude) = M(a.value / b.value)
+(p::Magnitude)(n::Real) = precise(n) * value(p)
+
+abbr(::Type{M}) where M<:Magnitude = String(nameof(M))
+abbr(::Type{Percent}) = "%"
+
+Base.show(io::IO, p::Magnitude) = print(io, p.value, abbr(typeof(p)))
+Base.show(io::IO, p::Percent) = print(io, Float64(p.value), abbr(typeof(p)))
+Base.convert(::Type{T}, p::Magnitude) where T <: Real = p isa T ? p : convert(T, value(p))
+Base.convert(::Type{M}, n::Real) where {m,M<:Magnitude{m}} = M(n/m)
+Base.convert(::Type{M}, n::M) where M<:Magnitude = n
+Base.promote_rule(::Type{Magnitude}, ::Type{B}) where B<:Real = Rational
+Base.round(u::M; kwargs...) where M<:Magnitude = M(round(u.value; kwargs...))
