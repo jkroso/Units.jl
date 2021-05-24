@@ -100,3 +100,9 @@ testset("Data") do
   @test convert(kb, 8000bit) == 1kb
   @test convert(kbit, 1kb) == 8kbit
 end
+
+testset("Sleep") do
+  @test 0.8 < @elapsed(sleep(1s)) < 1.2
+  @test 0.3 < @elapsed(sleep(500ms)) < 0.7
+  @test 0.003 < @elapsed(sleep(5000ns)) < 0.01
+end
