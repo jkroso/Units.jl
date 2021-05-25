@@ -589,7 +589,7 @@ Base.:*(a::Real, ::Type{M}) where M<:Magnitude = M(a)
 Base.:*(a::M, b::M) where M<:Magnitude = M(value(a) * value(b))
 Base.:+(a::M, b::M) where M<:Magnitude = M(a.value + b.value)
 Base.:-(a::M, b::M) where M<:Magnitude = M(a.value - b.value)
-for op in (:*, :/)
+for op in (:*, :/, :+, :-)
   @eval Base.$op(a::Real, b::Magnitude) = $op(a, value(b))
   @eval Base.$op(a::Magnitude, b::Real) = $op(value(a), b)
 end
