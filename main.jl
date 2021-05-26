@@ -573,6 +573,11 @@ abstract type Data <: BaseUnit end
 Base.convert(B::Type{Bit{m}}, b::Byte) where m = B(8*convert(Real, b)/basefactor(B))
 Base.convert(B::Type{Byte{m}}, b::Bit) where m = B((convert(Real, b)/8)/basefactor(B))
 
+struct Lumen <: Luminosity value::Real end
+abbr(::Type{Lumen}) = "lm"
+@export lm = Lumen
+@export lx = Lumen/m²
+
 "Represents scaled numbers like percent, and ppm"
 abstract type Magnitude{m} <: Number end
 magnitude(::Magnitude{m}) where m = m
