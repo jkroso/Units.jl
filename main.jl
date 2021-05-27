@@ -371,7 +371,7 @@ const time_factors = Dict{Rational,Symbol}(60 => :minute,
                                            2629746 => :month,
                                            31556952 => :year)
 abbr(::Type{Second{f}}) where f =
-  String(get(time_factors, f, string(get(prefix, -round(Int, log(10, abs(f))), ""), 's')))
+  String(get(time_factors, f, string(get(prefix, round(Int, log10(f)), ""), 's')))
 basefactor(::Type{Second{f}}) where f = f
 Base.promote_rule(::Type{Second{f1}},::Type{Second{f2}}) where {f1,f2} = Second{min(f1,f2)}
 
