@@ -558,6 +558,8 @@ abbr(::Type{bar}) = "bar"
 abbr(::Type{mbar}) = "mbar"
 
 @export Hertz = inv(s)
+@export Hz = Hertz
+abbr(::Type{Hz}) = "Hz"
 @export Coulomb = A*s
 @export Volt = Joule/Coulomb
 @export V = Volt
