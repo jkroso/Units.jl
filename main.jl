@@ -353,7 +353,7 @@ Base.inv(::Type{E}) where E<:Exponent =
     d, T = E.parameters
     Exponent{-d, T}
   end
-unionall(E::Type{Exponent{n,T}}) where {n,T} = (T isa DataType && T.abstract) || T isa UnionAll ? Exponent{n,<:T} : E
+unionall(E::Type{Exponent{n,T}}) where {n,T} = (T isa DataType && isabstracttype(T)) || T isa UnionAll ? Exponent{n,<:T} : E
 unionall(U::UnionAll) = U
 
 Base.promote_rule(::Type{Exponent{d,TA}}, ::Type{Exponent{d,TB}}) where {d,TA,TB} =
@@ -371,7 +371,8 @@ const time_factors = Dict{Rational,Symbol}(60 => :minute,
                                            2629746 => :month,
                                            31556952 => :year)
 abbr(::Type{Second{f}}) where f =
-  String(get(time_factors, f, string(get(prefix, round(Int, log10(f)), ""), 's')))
+  String(get(time_factors, f, string(get(prefix, magnitude(f), ""), 's')))
+magnitude(n::Real) = round(Int, n > 0 ? log10(n) : -log10(abs(n)))
 basefactor(::Type{Second{f}}) where f = f
 Base.promote_rule(::Type{Second{f1}},::Type{Second{f2}}) where {f1,f2} = Second{min(f1,f2)}
 
@@ -485,7 +486,7 @@ ub(D::DataType) = D
 ub(D::TypeVar) = D.ub
 ub(D::UnionAll) = D.body
 isabstract(::Union{TypeVar,UnionAll}) = true
-isabstract(D::DataType) = D.hasfreetypevars
+isabstract(D::DataType) = !isempty(D.parameters) && any(x->x isa TypeVar, D.parameters)
 
 @export Area = Length^2
 @export Volume = Length^3
