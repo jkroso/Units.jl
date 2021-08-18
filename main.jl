@@ -609,6 +609,7 @@ abbr(::Type{Percent}) = "%"
 
 Base.show(io::IO, p::Magnitude) = print(io, p.value, abbr(typeof(p)))
 Base.show(io::IO, p::Percent) = print(io, Float64(p.value), abbr(typeof(p)))
+Base.abs(m::M) where M<:Magnitude = M(abs(m.value))
 Base.convert(::Type{T}, p::Magnitude) where T <: Real = p isa T ? p : convert(T, value(p))
 Base.convert(::Type{M}, n::Real) where {m,M<:Magnitude{m}} = M(n/m)
 Base.convert(::Type{M}, n::M) where M<:Magnitude = n
