@@ -601,7 +601,7 @@ for op in (:*, :/, :+, :-)
   @eval Base.$op(a::Real, b::Magnitude) = $op(a, value(b))
   @eval Base.$op(a::Magnitude, b::Real) = $op(value(a), b)
 end
-Base.:/(a::Magnitude, b::Magnitude) = M(a.value / b.value)
+Base.:/(a::M, b::M) where M<:Magnitude = M(a.value / b.value)
 (p::Magnitude)(n::Real) = precise(n) * value(p)
 
 abbr(::Type{M}) where M<:Magnitude = String(nameof(M))
