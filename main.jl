@@ -420,6 +420,9 @@ for λ ∈ (:<, :>, :(==), :isless)
   end
 end
 
+scaled_value(x) = value(x)
+scaled_value(x::Combination{T,m}) where {T,m} = value(x) * 10^m
+
 for op in (:*, :/)
   @eval Base.$op(a::Unit, b::Unit) = $op(convert(Combination, a), convert(Combination, b))
   @eval Base.$op(a::Unit, b::Combination) = $op(convert(Combination, a), b)
@@ -427,7 +430,7 @@ for op in (:*, :/)
   @eval Base.$op(a::A, b::B) where {A<:Combination, B<:Combination} = begin
     T = $op(A, B)
     params_a, params_b = (params(A), params(B))
-    value_a, value_b = (value(a), value(b))
+    value_a, value_b = (scaled_value(a), scaled_value(b))
     for EA in params_a
       D = baseunit(EA)
       i = findfirst(E->baseunit(E) == D, params_b)

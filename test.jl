@@ -87,6 +87,7 @@
 @test round(m, 900mm) == 1m
 @test round(9.6742mm, digits=2) == 9.67mm
 @test round(Percent(10.547), digits=2) == Percent(10.55)
+@test 1kW/(200W/m²) == 5m²
 
 testset("unsorted combinations") do
   A1 = Combination{Tuple{Exponent{1, kg}, Exponent{2, m}, Exponent{-3, s}}, 0}
