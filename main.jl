@@ -498,6 +498,7 @@ isabstract(D::DataType) = !isempty(D.parameters) && any(x->x isa TypeVar, D.para
 @export Area = Length^2
 @export Volume = Length^3
 @export Pressure = Mass/Area
+@export Density = Mass/Volume
 @export Speed = Length/Time
 @export Acceleration = Speed/Time
 @export Jerk = Acceleration/Time
