@@ -63,7 +63,7 @@
 @test Combination{Tuple{s^1},0}(12) * Combination{Tuple{km^1, minute^-1},0}(1) == (1//5)km
 @test 1mm² * 2cm^1 == 20mm³
 @test 2m²/1m² == 2
-@test 1s/5s == 1//5
+@test isapprox(1s/5s, 1//5)
 @test 1m/5s == 0.2m/s
 @test 1.1s/1m² == 1.1s/m²
 @test (1.1s^2)/1m == 1.1s^2/m && 1m²/2m == 0.5m
