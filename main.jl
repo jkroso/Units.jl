@@ -85,18 +85,22 @@ end
 
 abstract type DerivedUnit <: Unit end
 
+elt(a,b) = begin
+  same_sign = exponent(a) < 0 == exponent(b) < 0
+  same_sign ? sort_value(a) < sort_value(b) : exponent(a) < exponent(b)
+end
 sort_params(s) = begin
   out = Vector{Any}(undef, length(s))
   for i in 1:length(s)
     out[i] = s[i]
   end
   out
-  sort!(out, by=siunit)
+  sort!(out, lt=elt, rev=true)
 end
-siunit(T::Type{BaseUnit}) = 99
-siunit(T::Type{Unit}) = 100
-siunit(T::Type{SIUnit{S}}) where S = S
-siunit(T::Type{<:DerivedUnit}) = siunit(supertype(T))
+sort_value(T::Type{BaseUnit}) = 99
+sort_value(T::Type{Unit}) = 100
+sort_value(T::Type{SIUnit{S}}) where S = S
+sort_value(T::Type{<:DerivedUnit}) = sort_value(supertype(T))
 
 "Represents units like m²"
 struct Exponent{dimensions,D<:BaseUnit} <: DerivedUnit value::Number end

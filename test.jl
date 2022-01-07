@@ -88,6 +88,12 @@
 @test round(9.6742mm, digits=2) == 9.67mm
 @test round(Percent(10.547), digits=2) == Percent(10.55)
 
+testset("unsorted combinations") do
+  A1 = Combination{Tuple{Exponent{1, kg}, Exponent{2, m}, Exponent{-3, s}}, 0}
+  A2 = Combination{Tuple{Exponent{1, kg}, Exponent{-3, s}, Exponent{2, m}}, 0}
+  @test convert(A1, 1A2) == 1A1
+end
+
 testset("Money") do
   @test Wage isa UnionAll
   @test AUD/hr <: Wage
