@@ -357,6 +357,7 @@ Base.inv(::Type{E}) where E<:Exponent =
     d, T = E.parameters
     Exponent{-d, T}
   end
+Base.inv(::Type{C}) where C<:Combination = combine(map(inv, params(C)), magnitude(C))
 unionall(E::Type{Exponent{n,T}}) where {n,T} = (T isa DataType && isabstracttype(T)) || T isa UnionAll ? Exponent{n,<:T} : E
 unionall(U::UnionAll) = U
 
@@ -421,7 +422,7 @@ for λ ∈ (:<, :>, :(==), :isless)
 end
 
 scaled_value(x) = value(x)
-scaled_value(x::Combination{T,m}) where {T,m} = value(x) * 10^m
+scaled_value(x::Combination{T,m}) where {T,m} = value(x) * 10^(m//1)
 
 for op in (:*, :/)
   @eval Base.$op(a::Unit, b::Unit) = $op(convert(Combination, a), convert(Combination, b))
@@ -590,16 +591,18 @@ abbr(::Type{Lumen}) = "lm"
 @export lx = Lumen/m²
 
 "Represents scaled numbers like percent, and ppm"
-abstract type Magnitude{m} <: Number end
+abstract type Magnitude{m} <: Real end
+Base.isinteger(m::Magnitude) = isinteger(convert(Float64, m))
 magnitude(::Magnitude{m}) where m = m
-value(m::Magnitude) = magnitude(m)m.value
+magnitude(::Type{<:Magnitude{m}}) where m = m
+value(m::Magnitude) = m.value * 10^(magnitude(m)//1)
 
 "Represents percentages like 15%"
-struct Percent <: Magnitude{1//100} value::Real end
+struct Percent <: Magnitude{-2} value::Real end
 Percent(n::AbstractFloat) = Percent(rationalize(n))
-struct ppm <: Magnitude{1//1000_000} value::Real end
-struct ppb <: Magnitude{1//1000_000_000} value::Real end
-struct ppt <: Magnitude{1//1000_000_000_000} value::Real end
+struct ppm <: Magnitude{-6} value::Real end
+struct ppb <: Magnitude{-9} value::Real end
+struct ppt <: Magnitude{-12} value::Real end
 
 Base.:*(a::Real, ::Type{M}) where M<:Magnitude = M(a)
 Base.:*(a::M, b::M) where M<:Magnitude = M(value(a) * value(b))
@@ -610,6 +613,9 @@ for op in (:*, :/, :+, :-)
   @eval Base.$op(a::Magnitude, b::Real) = $op(value(a), b)
 end
 Base.:/(a::M, b::M) where M<:Magnitude = M(a.value / b.value)
+Base.:/(a::Magnitude, B::Type{<:Unit}) = magnitude(inv(tocombination(B)), magnitude(a))(a.value)
+Base.:/(M::Type{<:Magnitude}, B::Type{<:Unit}) = magnitude(inv(tocombination(B)), magnitude(M))
+
 (p::Magnitude)(n::Real) = precise(n) * value(p)
 
 abbr(::Type{M}) where M<:Magnitude = String(nameof(M))

@@ -113,3 +113,9 @@ testset("Sleep") do
   @test 0.3 < @elapsed(sleep(500ms)) < 0.7
   @test 0.001 < @elapsed(sleep(5000ns)) < 0.01
 end
+
+testset("magnitudes") do
+  @test Percent/year == Combination{Tuple{year^-1}, -2}
+  @test 10Percent/year == 10Combination{Tuple{year^-1}, -2}
+  @test 10Percent/year * 5year == 0.5
+end
