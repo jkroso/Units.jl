@@ -190,7 +190,7 @@ magnitude(T::Type{<:Combination}) = begin
   if T isa UnionAll
     T.body.parameters[2]
   else
-    T.parameters[2]
+    sum(magnitude, T.parameters[1].parameters) + T.parameters[2]
   end
 end
 magnitude(u::UnionAll) = magnitude(u.body)
@@ -233,7 +233,7 @@ conversion_factor(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = 
   pa, pb = (params(A), params(B))
   @assert length(pa) == length(pb) "$B is not equivelent to $A"
   f = foldl((value, p)->value * conversion_factor(p[1], p[2]), zip(pa, pb), init=1)
-  ma, mb = magnitude(A), magnitude(B)
+  ma, mb = top_level_magnitude(A), top_level_magnitude(B)
   ma == mb && return f
   f * (10//1)^-(ma-mb)
 end
@@ -253,7 +253,7 @@ simplify(::Type{C}) where C<:Combination = begin
   p = collect(Iterators.filter(E->exponent(E) != 0, params(C)))
   length(p) == 0 && return Real
   length(p) == 1 && return simplify(p[1])
-  Combination{Tuple{p...}, magnitude(C)}
+  Combination{Tuple{p...}, top_level_magnitude(C)}
 end
 
 "Formats long numbers with commas seperating it into chunks"
@@ -372,7 +372,7 @@ Base.inv(::Type{E}) where E<:Exponent =
     d, T = E.parameters
     Exponent{-d, T}
   end
-Base.inv(::Type{C}) where C<:Combination = combine(map(inv, params(C)), magnitude(C))
+Base.inv(::Type{C}) where C<:Combination = combine(map(inv, params(C)), top_level_magnitude(C))
 unionall(E::Type{Exponent{n,T}}) where {n,T} = (T isa DataType && isabstracttype(T)) || T isa UnionAll ? Exponent{n,<:T} : E
 unionall(U::UnionAll) = U
 
@@ -436,8 +436,8 @@ for λ ∈ (:<, :>, :(==), :isless)
   end
 end
 
-scaled_value(x) = value(x)
-scaled_value(x::Combination{T,m}) where {T,m} = value(x) * 10^(m//1)
+top_level_magnitude(x) = 0
+top_level_magnitude(::Type{<:Combination{x,m}}) where {x,m} = m
 
 for op in (:*, :/)
   @eval Base.$op(a::Unit, b::Unit) = $op(convert(Combination, a), convert(Combination, b))
@@ -446,7 +446,7 @@ for op in (:*, :/)
   @eval Base.$op(a::A, b::B) where {A<:Combination, B<:Combination} = begin
     T = $op(A, B)
     params_a, params_b = (params(A), params(B))
-    value_a, value_b = (scaled_value(a), scaled_value(b))
+    value_a, value_b = (value(a), value(b))
     for EA in params_a
       D = baseunit(EA)
       i = findfirst(E->baseunit(E) == D, params_b)
@@ -458,7 +458,11 @@ for op in (:*, :/)
       value_a *= basefactor(EA)/basefactor(Exponent{da,T0})
       value_b *= basefactor(EB)/basefactor(Exponent{db,T0})
     end
-    T($op(value_a, value_b))
+    val = $op(value_a, value_b)
+    out_mag = top_level_magnitude(T)
+    val *= (10//1)^(top_level_magnitude(A) - out_mag)
+    val *= (10//1)^(top_level_magnitude(B) - out_mag)
+    T(val)
   end
 end
 
@@ -486,7 +490,7 @@ for op in (:+, :-, :*, :/)
         end
       end
     end
-    combine(units, magnitude(A))
+    combine(units, 0)
   end
   @eval Base.$op(a::A, ::Type{B}) where {A<:Unit,B<:Unit} = $op(A,B)(a.value)
   @eval Base.$op(::Type{A}, b::B) where {A<:Unit,B<:Unit} = $op(A,B)(b.value)
