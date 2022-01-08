@@ -178,9 +178,24 @@ Get/set the magnitude of a Unit
 `magnitude(km) = 3`
 `magnitude(km) == magnitude(m, 3)`
 """
-magnitude(::Type{<:BaseUnit}) = 0
-magnitude(::Type{<:Combination{T,m}}) where {T,m} = m
-magnitude(u::UnionAll)= u.body.parameters[2]
+magnitude(::Any) = 0
+magnitude(E::Type{<:Exponent}) = begin
+  if E isa UnionAll
+    magnitude(E.body.parameters[2])
+  else
+    magnitude(E.parameters[2])
+  end
+end
+magnitude(T::Type{<:Combination}) = begin
+  if T isa UnionAll
+    T.body.parameters[2]
+  else
+    T.parameters[2]
+  end
+end
+magnitude(u::UnionAll) = magnitude(u.body)
+magnitude(u::TypeVar)= magnitude(u.ub)
+
 magnitude(::Type{<:Combination{T,_}}, m) where {T,_} = Combination{T,m}
 magnitude(::Type{T}, m) where T<:Exponent = Combination{Tuple{T},m}
 magnitude(::Type{SealedUnit{U,s}}, m) where {U,s} = SealedUnit{magnitude(U, m),s}
@@ -377,7 +392,7 @@ const time_factors = Dict{Rational,Symbol}(60 => :minute,
                                            31556952 => :year)
 abbr(::Type{Second{f}}) where f =
   String(get(time_factors, f, string(get(prefix, magnitude(f), ""), 's')))
-magnitude(n::Real) = round(Int, n > 0 ? log10(n) : -log10(abs(n)))
+magnitude(n::Real) = n == 0 ? 0 : round(Int, n > 0 ? log10(n) : -log10(abs(n)))
 basefactor(::Type{Second{f}}) where f = f
 Base.promote_rule(::Type{Second{f1}},::Type{Second{f2}}) where {f1,f2} = Second{min(f1,f2)}
 
