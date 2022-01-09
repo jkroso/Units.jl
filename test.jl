@@ -119,3 +119,7 @@ testset("magnitudes") do
   @test 10Percent/year == 10Combination{Tuple{year^-1}, -2}
   @test 10Percent/year * 5year == 0.5
 end
+
+testset("TODO") do
+  @test (1kW) * (1K/kW) == 1K
+end
