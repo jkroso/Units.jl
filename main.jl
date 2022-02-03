@@ -84,9 +84,16 @@ wrap(T, e) = isabstract(T) ? Exponent{D, e} where D<:ub(T) : Exponent{T,e}
 Base.inv(::Type{Exponent{d,n}}) where {d,n} = wrap(d, -n)
 Base.inv(E::Type{<:Exponent}) = wrap(get_param(E, 1), -get_param(E, 2))
 Base.inv(::Type{D}) where D<:Dimension = wrap(D, -1)
+Base.inv(C::Type{<:Combination}) = map_combo(inv, C)
 Base.:^(D::Type{<:Unit}, e) = wrap(D, e)
 Base.:^(::Type{Exponent{d, e1}}, e2) where {d,e1} = wrap(d, e1 * e2)
 Base.:^(E::Type{<:Exponent}, e) = wrap(get_param(E, 1), get_param(E, 2) * e)
+Base.:^(C::Type{<:Combination}, e) = map_combo(d->d^e, C)
+
+map_combo(f, C::Type{<:Combination}) = begin
+  dims, units = parameters(get_param(C, 1)), parameters(get_param(C, 2))
+  Combination{Tuple{map(f, dims)...}, Tuple{map(f, units)...}}
+end
 
 Base.promote_rule(::Type{Exponent{d1,e}}, ::Type{Exponent{d2,e}}) where {d1,d2,e} = wrap(promote_type(d1, d2), e)
 Base.promote_rule(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = begin
@@ -118,7 +125,7 @@ Base.:-(n::Unit) = typeof(n)(-n.value)
 Base.:*(n::Real, ::Type{T}) where T<:Unit = T(n)
 Base.:*(::Type{T}, n::Real) where T<:Unit = T(n)
 Base.:/(n::Real, ::Type{T}) where T<:Unit = inv(T)(n)
-Base.:^(u::Unit, n::Integer) = typeof(u)^n * u.value^n
+Base.:^(u::Unit, n::Integer) = (typeof(u)^n)(u.value^n)
 Base.convert(::Type{U}, n::Real) where U<:Unit = U(n)
 Base.convert(::Type{N}, u::U) where {N<:Real,U<:Unit} = convert(N, u.value * basefactor(U))
 Base.convert(::Type{U}, n::Unit) where U<:Unit = U(n.value * conversion_factor(typeof(n), U))

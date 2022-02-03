@@ -74,6 +74,9 @@
 @test s^2/m² <: AbstractCombination{<:Tuple{Time^2,Length^-2}}
 @test m/s <: Speed
 @test m/s^2 <: Acceleration
+@test (km/hr)^2 == (km^2/hr^2)
+@test (12km/hr)^2 == (12^2)*(km^2/hr^2)
+@test (km/hr)^-2 == (km^-2/hr^-2)
 @test convert(s, 1ns) ≈ 1e-9s
 @test 1m ÷ 49mm == 20
 @test 1m % 49mm == 20mm
