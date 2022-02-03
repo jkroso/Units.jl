@@ -96,6 +96,7 @@ testset("DerivedUnit") do
   @test convert(kJ, 3600kg*m^2/s^2) ≈ 3.6kJ
   @test 1kW * (1K/kW) == 1K
   @test convert(kWh, 3600J) ≈ 0.001kWh
+  @test 1kW*5m/kW == 5m
 end
 
 @use "./Money.jl" Wage AUD USD

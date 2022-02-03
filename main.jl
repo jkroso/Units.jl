@@ -277,6 +277,8 @@ for λ in (:*, :/)
   @eval Base.$λ(::Type{A}, b::B) where {A<:Unit,B<:Unit} = pruned($λ(A,B), b.value)
   @eval Base.$λ(::Type{A}, ::Type{B}) where {A<:Unit,B<:Unit} = $λ(to_combo(A), to_combo(B))
   @eval Base.$λ(A::Type{<:DerivedUnit}, B::Type{<:DerivedUnit}) = $λ(to_combo(A), to_combo(B))
+  @eval Base.$λ(A::Type{<:DerivedUnit}, B::Type{<:AbstractCombination}) = $λ(to_combo(A), B)
+  @eval Base.$λ(A::Type{<:AbstractCombination}, B::Type{<:DerivedUnit}) = $λ(A, to_combo(B))
   @eval Base.$λ(A::Type{<:AbstractCombination}, B::Type{<:AbstractCombination}) = begin
     dims_a, dims_b = parameters(get_param(A, 1)), parameters(get_param(B, 1))
     Das, Dbs = map(abstract_dimension, dims_a), map(abstract_dimension, dims_b)
