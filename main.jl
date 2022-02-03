@@ -172,7 +172,7 @@ end
 
 "unpack derived units, dedupe dimensions, and keep track of the resulting scale difference"
 simple_units(C::Type{<:AbstractCombination}) = begin
-  units = allunits(C)
+  units, scaler = flatten_units(C)
   dims = map(abstract_dimension, units)
   output = map(unique(dims)) do d
     like_units = units[findall(==(d), dims)]
@@ -180,7 +180,7 @@ simple_units(C::Type{<:AbstractCombination}) = begin
     out = Exponent{T, mapreduce(power, +, like_units)}
     out, mapreduce(u->conversion_factor(u, Exponent{T,power(u)}), *, like_units)
   end
-  filter!(!ispointless, map(first, output)), mapreduce(last, *, output) * scaler(C)
+  filter!(!ispointless, map(first, output)), mapreduce(last, *, output) * scaler
 end
 
 typebelow(child, stop) = begin
@@ -217,11 +217,19 @@ subunits(C::Type{<:Combination}) = parameters(parameters(C)[2])
 subunits(D::Type{<:AbstractCombination}) = parameters(parameters(D)[1])
 subunits(D::Type{<:DerivedUnit{m,units}}) where {m,units} = parameters(units)
 
-allunits(C::Type{<:AbstractCombination}) where u = mapcat(allunits, parameters(get_param(C, 1)))
-allunits(::Type{<:Combination{d,u}}) where {d,u} = mapcat(allunits, parameters(u))
-allunits(::Type{<:DerivedUnit{m,u}}) where {m,u} = mapcat(allunits, parameters(u))
-allunits(::Type{<:Exponent{d,e}}) where {d,e} = map(u->wrap(unwrap(u),power(u)*e), allunits(d))
-allunits(D::Type{<:Dimension}) = Any[D]
+flatten_units(C::Type{<:AbstractCombination}) where u = accum_units(map(flatten_units, parameters(get_param(C, 1))), 1)
+flatten_units(::Type{<:Combination{d,u}}) where {d,u} = accum_units(map(flatten_units, parameters(u)), 1)
+flatten_units(::Type{<:DerivedUnit{m,u}}) where {m,u} = accum_units(map(flatten_units, parameters(u)), m)
+flatten_units(::Type{<:Exponent{d,e}}) where {d,e} = begin
+  units, scale = flatten_units(d)
+  map(u->wrap(unwrap(u),power(u)*e), units), scale
+end
+flatten_units(D::Type{<:Dimension}) = Any[D], 1
+accum_units(results, scale) = begin
+  reduce(results, init=(AnyType[],scale)) do out, (units, scale)
+    push!(out[1], units...), out[2] * scale
+  end
+end
 
 const AnyType = Union{UnionAll,DataType}
 
@@ -385,7 +393,9 @@ macro deriveunit(name, units, abbrev)
     magnitudes = []
   end
   quote
-    Base.@__doc__ struct $N{magnitude} <: DerivedUnit{magnitude, Tuple{allunits($(esc(units)))...}}
+    subunits, scale = flatten_units($(esc(units)))
+    @assert scale == 1 "derived units should be defined with no scale"
+    Base.@__doc__ struct $N{magnitude} <: DerivedUnit{magnitude, Tuple{subunits...}}
       value::Number
     end
     $Units.short_name(::Type{$N{m}}) where m = $(string(short))
@@ -403,6 +413,8 @@ end
 
 @deriveunit Joule kg*m²/s^2 [k M]J
 @deriveunit Watt kg*m²/s^3 [m k M]W
+@abbreviate Wh W*hr
+@abbreviate kWh kW*hr
 @deriveunit Newton kg*m/s^2 [k]N
 @deriveunit Pascal N/m² [k M]Pa
 @abbreviate bar Pascal{Magnitude(5)}
@@ -435,8 +447,8 @@ abbr(::Type{Permille}) = "‰"
 abstract type Angle <: NullDimension end
 baseunit(::Type{Angle}) = Radian
 struct Degree <: Angle value::Number end
-struct Radian <: Angle value::Number end
 @abbreviate ° Degree
+struct Radian <: Angle value::Number end
 @abbreviate rad Radian
 basefactor(::Type{Degree}) = π/180
 Base.promote_rule(::Type{<:Angle}, ::Type{<:Angle}) = Radian

@@ -82,7 +82,7 @@
 @test round(m, 900mm) == 1m
 @test round(9.6742mm, digits=2) == 9.67mm
 
-@use "." W mW kW MW J hr kJ K
+@use "." kWh W mW kW MW J hr kJ K
 testset("DerivedUnit") do
   @test conversion_factor(mW, W) == 1//1000
   @test conversion_factor(W, mW) == 1000
@@ -95,6 +95,7 @@ testset("DerivedUnit") do
   @test convert(W*hr, 3600kg*m^2/s^2) == 1W*hr
   @test convert(kJ, 3600kg*m^2/s^2) ≈ 3.6kJ
   @test 1kW * (1K/kW) == 1K
+  @test convert(kWh, 3600J) ≈ 0.001kWh
 end
 
 @use "./Money.jl" Wage AUD USD
