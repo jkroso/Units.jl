@@ -138,7 +138,7 @@ Base.sqrt(s::Exponent{T,d}) where {d,T} = begin
 end
 
 for λ in (:*, :/, :+, :-)
-  @eval Base.$λ(n::Real, u::T) where T<:Unit = T($λ(u.value, n))
+  @eval Base.$λ(n::Real, u::T) where T<:Unit = T($λ(n, u.value))
   @eval Base.$λ(u::T, n::Real) where T<:Unit = T($λ(u.value, n))
 end
 

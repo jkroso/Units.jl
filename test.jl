@@ -44,6 +44,7 @@
 @test 1 < 1kg
 @test m^2*s^0 == m^2
 @test promote(1m/s, 9km/hr) == (1m/s, 2.5m/s)
+@test 1/5yr ≈ 0.2yr
 @test (60m/s) / (1/minute) == 3600m
 @test 1m/s == (m/s)(1)
 @test 1m/s^2 == (m/s^2)(1)
