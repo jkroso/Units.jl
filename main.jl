@@ -1,4 +1,4 @@
-@use "./utils.jl" get_body get_param set_param modify_param seperate Magnitude exponents prefixs
+@use "./utils.jl" get_param set_param seperate Magnitude exponents prefixs
 @use "github.com/FluxML/MacroTools.jl" => MacroTools @capture
 @use "github.com/jkroso/Prospects.jl" group mapcat
 
@@ -162,10 +162,11 @@ Base.convert(::Type{T}, n::D) where {D<:Dimension, T<:Dimension} = begin
   T(n.value * conversion_factor(D, T))
 end
 basefactor(D::Type{<:Dimension}) = scaler(D)
+basefactor(D::Type{<:DerivedUnit}) = scaler(D)
 basefactor(E::Type{Exponent{d,e}}) where {d,e} = basefactor(d)^e
 conversion_factor(A::Type{<:Unit}, B::Type{<:Unit}) = conversion_factor(to_combo(A), to_combo(B))
-conversion_factor(::Type{A}, ::Type{B}) where {A<:Dimension,B<:Dimension} = scaler(A)/scaler(B)
-conversion_factor(::Type{A}, ::Type{B}) where {A<:Exponent,B<:Exponent} = scaler(A)^power(A)/scaler(B)^power(B)
+conversion_factor(::Type{A}, ::Type{B}) where {A<:Dimension,B<:Dimension} = basefactor(A)/basefactor(B)
+conversion_factor(::Type{A}, ::Type{B}) where {A<:Exponent,B<:Exponent} = basefactor(A)/basefactor(B)
 conversion_factor(A::Type{<:AbstractCombination{DA}}, B::Type{<:AbstractCombination{DB}}) where {DA,DB} = begin
   (units_a, scaler_a), (units_b, scaler_b) = simple_units(A), simple_units(B)
   mapreduce(conversion_factor, *, units_a, units_b, init=scaler_a/scaler_b)
