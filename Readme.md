@@ -1,5 +1,19 @@
-# Units
+# Units.jl
 
-Inspired by [Unitful.jl](https://github.com/ajkeller34/Unitful.jl) I've been experimenting with ways of supporting units in Julia.
+This unit library is designed for ultimate usability. Everything should just work as you expect.
 
-With Unitful when you define a new dimension type your quantities are not actually instances of that type. So it's hard to extend the behavior of those objects. It's doable I'm sure but not obvious. With this package you define new Units by simply subtyping `Dimension`. So if you want to do something like change the way this type is displayed you just do the obvious thing and define `show(::IO, ::MyDimension)`. See [Money.jl](./Money.jl) for an example. Creating abstract or concrete derived types is also equally obvious `km/hr <: Length/Time` thanks to `UnionAll` types.
+## Installation
+
+```julia
+pkg> add https://github.com/jkroso/Kip.jl
+julia> using Kip
+julia> @use "github.com/jkroso/Units.jl" m s hr Speed Length Time;
+julia> Length/Time == Speed
+true
+julia> m/s <: Speed
+true
+julia> 1m/s isa Speed
+true
+julia> convert(km/hr, 1m/s)
+3.6km/hr
+```
