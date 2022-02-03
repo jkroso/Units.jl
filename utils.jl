@@ -29,6 +29,7 @@ get_body(x::DataType) = x
 
 struct Magnitude <: Real value::Int8 end
 Base.convert(::Type{N}, m::Magnitude) where N<:Number = convert(N, Rational(10)^m.value)
+Base.convert(::Type{Magnitude}, m::Magnitude) = m
 Base.promote_rule(::Type{N}, ::Type{Magnitude}) where N<:Number = N
 Base.promote_rule(::Type{<:Integer}, ::Type{Magnitude}) = Rational
 Base.:/(a::Magnitude, b::Magnitude) = Magnitude(a.value - b.value)
@@ -37,7 +38,8 @@ Base.:<(a::Magnitude, b::Magnitude) = a.value < b.value
 Base.:-(a::Magnitude) = Magnitude(-a.value)
 Base.:-(a::Magnitude, b::Magnitude) = Magnitude(a.value - b.value)
 Base.:+(a::Magnitude, b::Magnitude) = Magnitude(a.value + b.value)
-Base.:^(m::Magnitude, n::Integer) = Rational(10)^(m.value*n)
+Base.:^(m::Magnitude, n::Integer) = Magnitude(m.value*n)
+Base.inv(m::Magnitude) = Magnitude(-m.value)
 const exponents = Vector{Char}("⁰¹²³⁴⁵⁶⁷⁸⁹")
 Base.show(io::IO, m::Magnitude) = begin
   s = join((exponents[d+1] for d in reverse!(digits(abs(m.value)))))
