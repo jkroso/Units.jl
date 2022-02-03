@@ -1,6 +1,6 @@
 @use "github.com/JuliaLang/Downloads.jl" download
 @use "github.com/jkroso/parse-json.jl"
-@use "." abbr basefactor Dimension Time get_units
+@use "." abbr scaler Dimension Time get_units
 @use "./utils" seperate
 import Dates: unix2datetime, today
 import Printf.@printf
@@ -46,7 +46,7 @@ Base.show(io::IO, wage::Wage) = begin
 end
 
 abbr(::Type{Money{c}}) where c = string(c)
-basefactor(::Type{Money{abbr}}) where abbr = rates[abbr]
+scaler(::Type{Money{abbr}}) where abbr = rates[abbr]
 Base.promote_rule(::Type{<:Money}, ::Type{<:Money}) = Money{:USD}
 
 for sym in [:USD :NZD :AUD :JPY :EUR :GBP]
