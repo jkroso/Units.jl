@@ -128,6 +128,7 @@ testset("dimensionless units") do
   @test Percent/yr == Combination{Tuple{Time^-1}, Tuple{Percent^1,yr^-1}}
   @test 10Percent/yr == 10Combination{Tuple{Time^-1}, Tuple{Percent^1,yr^-1}}
   @test 10Percent/yr * 5yr == 50Percent
+  @test convert(m, 20m*(10Percent)) == 2m
   testset("Angles") do
     @test (60m/s) / (1°/minute) == 3600m/°
     @test convert(°, 1rad) == 57.29577951308232°

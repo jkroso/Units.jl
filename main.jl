@@ -163,6 +163,7 @@ Base.convert(::Type{T}, n::D) where {D<:Dimension, T<:Dimension} = begin
 end
 basefactor(D::Type{<:Dimension}) = scaler(D)
 basefactor(E::Type{Exponent{d,e}}) where {d,e} = basefactor(d)^e
+conversion_factor(A::Type{<:Unit}, B::Type{<:Unit}) = conversion_factor(to_combo(A), to_combo(B))
 conversion_factor(::Type{A}, ::Type{B}) where {A<:Dimension,B<:Dimension} = scaler(A)/scaler(B)
 conversion_factor(::Type{A}, ::Type{B}) where {A<:Exponent,B<:Exponent} = scaler(A)^power(A)/scaler(B)^power(B)
 conversion_factor(A::Type{<:AbstractCombination{DA}}, B::Type{<:AbstractCombination{DB}}) where {DA,DB} = begin
@@ -172,15 +173,17 @@ end
 
 "unpack derived units, dedupe dimensions, and keep track of the resulting scale difference"
 simple_units(C::Type{<:AbstractCombination}) = begin
-  units, scaler = flatten_units(C)
+  units, scale = flatten_units(C)
   dims = map(abstract_dimension, units)
-  output = map(unique(dims)) do d
+  nulls = units[findall(==(NullDimension), dims)]
+  scale *= mapreduce(scaler, *, nulls, init=1)
+  output = map(unique!(filter(!=(NullDimension), dims))) do d
     like_units = units[findall(==(d), dims)]
     T = promote_type(map(unwrap, like_units)...)
     out = Exponent{T, mapreduce(power, +, like_units)}
     out, mapreduce(u->conversion_factor(u, Exponent{T,power(u)}), *, like_units)
   end
-  filter!(!ispointless, map(first, output)), mapreduce(last, *, output) * scaler
+  filter!(!ispointless, map(first, output)), mapreduce(last, *, output) * scale
 end
 
 typebelow(child, stop) = begin
@@ -439,6 +442,7 @@ abstract_dimension(::Type{<:NullDimension}) = NullDimension
 struct ScalingUnit{magnitude} <: NullDimension
   value::Number
 end
+scaler(::Type{ScalingUnit{m}}) where m = m
 const Percent = ScalingUnit{Magnitude(-2)}
 abbr(::Type{Percent}) = "%"
 const Permille = ScalingUnit{Magnitude(-3)}
