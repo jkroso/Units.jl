@@ -171,6 +171,10 @@ end
 basefactor(D::Type{<:Dimension}) = scaler(D)
 basefactor(D::Type{<:DerivedUnit}) = scaler(D)
 basefactor(E::Type{Exponent{d,e}}) where {d,e} = basefactor(d)^e
+basefactor(C::Type{<:Combination}) = begin
+  units = parameters(get_param(C, 2))
+  mapreduce(basefactor, *, units, init=1)
+end
 conversion_factor(A::Type{<:Unit}, B::Type{<:Unit}) = conversion_factor(to_combo(A), to_combo(B))
 conversion_factor(::Type{A}, ::Type{B}) where {A<:Dimension,B<:Dimension} = basefactor(A)/basefactor(B)
 conversion_factor(::Type{A}, ::Type{B}) where {A<:Exponent,B<:Exponent} = basefactor(A)/basefactor(B)
@@ -434,6 +438,7 @@ end
 @abbreviate mbar Pascal{Magnitude(2)}
 @deriveunit Coulomb A*s C
 @deriveunit Volt J/C V
+@abbreviate kV Volt{Magnitude(3)}
 @deriveunit Ohm V/A Ω
 @abbreviate Hz inv(s)
 @abbreviate kHz inv(ms)

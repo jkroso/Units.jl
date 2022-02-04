@@ -1,4 +1,4 @@
-@use "." dimension abstract_dimension conversion_factor abbr Combination AbstractCombination Exponent Meter Gram Second hr m mm cm km m² s g kg Length Time day yr minute ton Speed Acceleration ns
+@use "." dimension abstract_dimension conversion_factor abbr Combination AbstractCombination Exponent Meter Gram Second hr m mm cm km m² s g kg Length Time day yr minute ton Speed Acceleration ns basefactor
 @use "github.com/jkroso/Rutherford.jl/test.jl" @test testset
 @use "./utils" Magnitude
 
@@ -85,9 +85,12 @@
 @test ceil(900.1mm) == 901mm
 @test round(m, 900mm) == 1m
 @test round(9.6742mm, digits=2) == 9.67mm
+@test basefactor(m*s) == 1
 
-@use "." kWh W mW kW MW J hr kJ K
+@use "." kWh W mW kW MW J hr kJ K V A kV
 testset("DerivedUnit") do
+  @test basefactor(kV*A) == 1000
+  @test conversion_factor(kV*A, kW) == 1
   @test conversion_factor(mW, W) == 1//1000
   @test conversion_factor(W, mW) == 1000
   @test conversion_factor(kW, MW) == 1//1000
