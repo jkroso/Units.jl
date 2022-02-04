@@ -154,7 +154,7 @@ for λ in (:+, :-)
   @eval Base.$λ(a::Unit, b::Unit) = $λ(promote(a, b)...)
 end
 
-for λ in (:<, :>, :(==))
+for λ in (:<, :>, :(==), :isless)
   @eval Base.$λ(a::Real,b::Unit) = $λ(a, convert(Real, b))
   @eval Base.$λ(a::Unit,b::Real) = $λ(convert(Real, a), b)
   @eval Base.$λ(a::T,b::T) where T<:Unit = $λ(a.value, b.value)

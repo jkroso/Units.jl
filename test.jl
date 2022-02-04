@@ -42,6 +42,7 @@
 @test 1kg > 2g
 @test 1kg > 2
 @test 1 < 1kg
+@test isless(1kg, 2kg)
 @test m^2*s^0 == m^2
 @test promote(1m/s, 9km/hr) == (1m/s, 2.5m/s)
 @test 1/5yr ≈ 0.2yr
