@@ -96,6 +96,8 @@ map_combo(f, C::Type{<:Combination}) = begin
 end
 
 Base.promote_rule(::Type{Exponent{d1,e}}, ::Type{Exponent{d2,e}}) where {d1,d2,e} = wrap(promote_type(d1, d2), e)
+Base.promote_rule(A::Type{<:Combination}, B::Type{<:Unit}) = simplify(promote_rule(A, to_combo(B)))
+Base.promote_rule(A::Type{<:Exponent}, B::Type{<:Dimension}) = promote_rule(A, wrap(B, 1))
 Base.promote_rule(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = begin
   dims_a, dims_b = get_param(A, 1), get_param(B, 1)
   @assert dims_a == dims_b "dimension mismatch"
