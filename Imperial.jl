@@ -1,12 +1,12 @@
 @use "." abbr Meter Length Area Volume m scaler
 
-const acre_side = sqrt(4046.8564224)
+const acre_side = rationalize(sqrt(4046.8564224))
 
-const imperial_units = Dict{Float64,Symbol}(
-  1609344/1000 => :mile,
-  9144/10000 => :yard,
-  3048/10000 => :ft,
-  254/10000 => :inch,
+const imperial_units = Dict{Rational,Symbol}(
+  1609344//1000 => :mile,
+  9144//10000 => :yard,
+  3048//10000 => :ft,
+  254//10000 => :inch,
   acre_side => :acre_side)
 
 struct ImperialLength{basefactor} <: Length value::Real end
