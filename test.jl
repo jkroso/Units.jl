@@ -150,7 +150,7 @@ end
 
 @use "./Imperial.jl" acre inch ft
 testset("imperial") do
-  @test convert(m², 1acre) == 4046.8564224m²
+  @test convert(m², 1acre) ≈ 4046.8564224m²
   @test abbr(inch) == "inch"
   @test convert(ft, 12inch) == 1ft
   @test convert(m, 1ft) ≈ (381//1250)m

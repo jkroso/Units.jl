@@ -167,7 +167,7 @@ for λ in (:<, :>, :(==), :isless)
 end
 
 Base.convert(::Type{T}, n::D) where {D<:Dimension, T<:Dimension} = begin
-  @assert dimension(T) == dimension(D) "Can't convert an $D to a $T"
+  @assert dimension(T).name.wrapper == dimension(D).name.wrapper "Can't convert an $D to a $T"
   T(n.value * conversion_factor(D, T))
 end
 basefactor(D::Type{<:Dimension}) = scaler(D)
