@@ -94,6 +94,11 @@ Base.:/(U::Type{<:Unit}, n::Real) = begin
   m = scaler(U)/convert(Magnitude, round(Int, n^(1//power(U))))
   simplify(wrap(D{m}, power(U)))
 end
+Base.:*(U::Type{<:Unit}, n::Real) = begin
+  D = unwrap(U).name.wrapper
+  m = scaler(U)*convert(Magnitude, round(Int, n^(1//power(U))))
+  simplify(wrap(D{m}, power(U)))
+end
 
 map_combo(f, C::Type{<:Combination}) = begin
   dims, units = parameters(get_param(C, 1)), parameters(get_param(C, 2))
@@ -130,7 +135,6 @@ abbr(::Type{D}) where {m,_,D<:DerivedUnit{m, _}} = abbr(m) * short_name(D)
 
 Base.:-(n::Unit) = typeof(n)(-n.value)
 Base.:*(n::Real, ::Type{T}) where T<:Unit = T(n)
-Base.:*(::Type{T}, n::Real) where T<:Unit = T(n)
 Base.:/(n::Real, ::Type{T}) where T<:Unit = inv(T)(n)
 Base.:^(u::Unit, n::Integer) = (typeof(u)^n)(u.value^n)
 Base.convert(::Type{U}, n::Real) where U<:Unit = U(n)

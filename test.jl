@@ -8,6 +8,8 @@
 @test abbr(m²/hr) == "m²/hr"
 @test m/1e3 == mm
 @test m^3/1e9 == mm^3
+@test mm^3*1e9 == m^3
+@test mm*1e3 == m
 @test conversion_factor(m^3, mm^3) == 1000_000_000
 @test conversion_factor(mm^3, m^3) == 1//1000_000_000
 @test conversion_factor(m^2,cm^2) == 10_000
