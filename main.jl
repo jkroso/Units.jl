@@ -175,10 +175,7 @@ for λ in (:<, :>, :(==), :isless)
   end
 end
 
-Base.convert(::Type{T}, n::D) where {D<:Dimension, T<:Dimension} = begin
-  @assert dimension(T).name.wrapper == dimension(D).name.wrapper "Can't convert an $D to a $T"
-  T(n.value * conversion_factor(D, T))
-end
+Base.convert(::Type{T}, n::D) where {D<:Dimension, T<:Dimension} = T(n.value * conversion_factor(D, T))
 basefactor(D::Type{<:Dimension}) = scaler(D)
 basefactor(D::Type{<:DerivedUnit}) = scaler(D)
 basefactor(E::Type{Exponent{d,e}}) where {d,e} = basefactor(d)^e
