@@ -89,6 +89,11 @@ Base.:^(D::Type{<:Unit}, e) = wrap(D, e)
 Base.:^(::Type{Exponent{d, e1}}, e2) where {d,e1} = wrap(d, e1 * e2)
 Base.:^(E::Type{<:Exponent}, e) = wrap(get_param(E, 1), get_param(E, 2) * e)
 Base.:^(C::Type{<:Combination}, e) = map_combo(d->d^e, C)
+Base.:/(U::Type{<:Unit}, n::Real) = begin
+  D = unwrap(U).name.wrapper
+  m = scaler(U)/convert(Magnitude, round(Int, n^(1//power(U))))
+  simplify(wrap(D{m}, power(U)))
+end
 
 map_combo(f, C::Type{<:Combination}) = begin
   dims, units = parameters(get_param(C, 1)), parameters(get_param(C, 2))
@@ -353,10 +358,11 @@ const Pop = Crackle/Time
 @defunit Meter <: Length [μ c m k]m
 const m² = m^2
 const m³ = m^3
-@abbreviate litre Volume{Meter{Magnitude(-1)}}
+@abbreviate litre m³/1e3
+@abbreviate ml litre/1e3
+@abbreviate μl litre/1e6
 @abbreviate hectare Area{Meter{Magnitude(2)}}
-@defunit Gram <: Mass [k]g
-const ton = Gram{Magnitude(6)}
+@defunit Gram <: Mass [μ m k]g
 @abbreviate ton Gram{Magnitude(6)}
 @defunit Ampere <: Current [m]A
 @defunit Lumen <: Luminosity lm

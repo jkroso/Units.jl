@@ -6,6 +6,8 @@
 @test abbr(AbstractCombination{Tuple{m²,hr^1}}) == "m²·hr"
 @test abbr(m²*hr) == "m²·hr"
 @test abbr(m²/hr) == "m²/hr"
+@test m/1e3 == mm
+@test m^3/1e9 == mm^3
 @test conversion_factor(m^3, mm^3) == 1000_000_000
 @test conversion_factor(mm^3, m^3) == 1//1000_000_000
 @test conversion_factor(m^2,cm^2) == 10_000

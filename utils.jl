@@ -30,6 +30,7 @@ get_body(x::DataType) = x
 struct Magnitude <: Real value::Int8 end
 Base.convert(::Type{N}, m::Magnitude) where N<:Number = convert(N, Rational(10)^m.value)
 Base.convert(::Type{Magnitude}, m::Magnitude) = m
+Base.convert(::Type{Magnitude}, n::Real) = Magnitude(log10(n))
 Base.promote_rule(::Type{N}, ::Type{Magnitude}) where N<:Number = N
 Base.promote_rule(::Type{<:Integer}, ::Type{Magnitude}) = Rational
 Base.:/(a::Magnitude, b::Magnitude) = Magnitude(a.value - b.value)
