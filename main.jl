@@ -89,15 +89,19 @@ Base.:^(D::Type{<:Unit}, e) = wrap(D, e)
 Base.:^(::Type{Exponent{d, e1}}, e2) where {d,e1} = wrap(d, e1 * e2)
 Base.:^(E::Type{<:Exponent}, e) = wrap(get_param(E, 1), get_param(E, 2) * e)
 Base.:^(C::Type{<:Combination}, e) = map_combo(d->d^e, C)
+tounionall(U::UnionAll) = U
+tounionall(U::DataType) = U.name.wrapper
 Base.:/(U::Type{<:Unit}, n::Real) = begin
-  D = unwrap(U).name.wrapper
-  m = scaler(U)/convert(Magnitude, round(Int, n^(1//power(U))))
-  simplify(wrap(D{m}, power(U)))
+  D = tounionall(unwrap(U))
+  m1 = convert(Magnitude, scaler(U))
+  m2 = convert(Magnitude, n^(1//power(U)))
+  simplify(wrap(D{m1/m2}, power(U)))
 end
 Base.:*(U::Type{<:Unit}, n::Real) = begin
-  D = unwrap(U).name.wrapper
-  m = scaler(U)*convert(Magnitude, round(Int, n^(1//power(U))))
-  simplify(wrap(D{m}, power(U)))
+  D = tounionall(unwrap(U))
+  m1 = convert(Magnitude, scaler(U))
+  m2 = convert(Magnitude, n^(1//power(U)))
+  simplify(wrap(D{m1*m2}, power(U)))
 end
 
 map_combo(f, C::Type{<:Combination}) = begin
@@ -223,6 +227,7 @@ dimension(C::Type{<:Combination}) = begin
 end
 unwrap(E::Type{<:Exponent}) = ub(get_param(E, 1))
 unwrap(D::Type{<:Dimension}) = D
+unwrap(D::Type{<:DerivedUnit}) = D
 
 to_combo(D::Type{<:AbstractCombination}) = D
 to_combo(D::Type{<:DerivedUnit}) = Combination{Tuple{dimensions(D)...}, Tuple{D^1}}
@@ -364,7 +369,7 @@ const m³ = m^3
 @abbreviate μl litre/1e6
 @abbreviate hectare Area{Meter{Magnitude(2)}}
 @defunit Gram <: Mass [μ m k]g
-@abbreviate ton Gram{Magnitude(6)}
+@abbreviate ton Gram*1e6
 @defunit Ampere <: Current [m]A
 @defunit Lumen <: Luminosity lm
 @abbreviate lx lm/m²
@@ -443,11 +448,11 @@ end
 @abbreviate kWh kW*hr
 @deriveunit Newton kg*m/s^2 [k]N
 @deriveunit Pascal N/m² [k M]Pa
-@abbreviate bar Pascal{Magnitude(5)}
-@abbreviate mbar Pascal{Magnitude(2)}
+@abbreviate bar Pascal*1e5
+@abbreviate mbar bar/1e3
 @deriveunit Coulomb A*s C
 @deriveunit Volt J/C V
-@abbreviate kV Volt{Magnitude(3)}
+@abbreviate kV Volt*1e3
 @deriveunit Ohm V/A Ω
 @abbreviate Hz inv(s)
 @abbreviate kHz inv(ms)
@@ -465,12 +470,12 @@ struct ScalingUnit{magnitude} <: NullDimension
   value::Number
 end
 scaler(::Type{ScalingUnit{m}}) where m = m
-const Percent = ScalingUnit{Magnitude(-2)}
+const Percent = ScalingUnit/1e2
 abbr(::Type{Percent}) = "%"
-const Permille = ScalingUnit{Magnitude(-3)}
+const Permille = ScalingUnit/1e3
 abbr(::Type{Permille}) = "‰"
-@abbreviate ppm ScalingUnit{Magnitude(-6)}
-@abbreviate ppb ScalingUnit{Magnitude(-9)}
+@abbreviate ppm ScalingUnit/1e6
+@abbreviate ppb ScalingUnit/1e9
 
 abstract type Angle <: NullDimension end
 baseunit(::Type{Angle}) = Radian
