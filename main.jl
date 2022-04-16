@@ -514,3 +514,10 @@ for λ in (:sin,:cos,:tan)
   @eval Base.$λ(n::Angle) = $λ(convert(Radian, n))
   @eval Base.$λ(n::Radian) = $λ(n.value)
 end
+
+scale(x::Unit) = begin
+  T = typeof(x)
+  trailing_zeros = findfirst(!=(0), digits(round(Int, x.value); base=10)) - 1
+  m = Magnitude(trailing_zeros ÷ 3 * 3)
+  (T*m)(x.value/m)
+end
