@@ -241,6 +241,8 @@ to_combo(D::Type{<:Exponent}) = begin
   end
 end
 
+subunits(::Type{Exponent{D,n}}) where {D<:DerivedUnit,n} = DataType[wrap(unwrap(x), power(x) * n) for x in subunits(D)]
+subunits(D::Type{<:Exponent}) = DataType[D]
 subunits(C::Type{<:Combination}) = parameters(parameters(C)[2])
 subunits(D::Type{<:AbstractCombination}) = parameters(parameters(D)[1])
 subunits(D::Type{<:DerivedUnit{m,units}}) where {m,units} = parameters(units)
@@ -298,6 +300,27 @@ end
 pruned(T, v) = begin
   T, scaler = prune(T)
   simplify(T)(v * scaler)
+end
+
+"""
+Unpack derived units within a combination. Returns a simplified type along with a scaler which
+is usefull if you a converting an instance of the input type to the simplified type
+"""
+unpack(::Type{Combination{Ds, units}}) where {Ds, units} = begin
+  subs = mapreduce(subunits, vcat, units.parameters, init=Any[])
+  isempty(subs) && return Combination{Tuple{}, Tuple{}}, 1
+  abstract_dims = map(abstract_dimension, subs)
+  output = map(unique(abstract_dims)) do d
+    like_units = subs[findall(==(d), abstract_dims)]
+    T = promote_type(map(unwrap, like_units)...)
+    out = Exponent{T, mapreduce(power, +, like_units)}
+    out, mapreduce(u->conversion_factor(u, Exponent{T,power(u)}), *, like_units)
+  end
+  simplify(Combination{Ds, Tuple{map(first, output)...}}), mapreduce(last, *, output)
+end
+unpacked(c::Combination) = begin
+  T, scaler = unpack(typeof(c))
+  T(c.value * scaler)
 end
 
 for λ in (:*, :/)
