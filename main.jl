@@ -195,6 +195,12 @@ conversion_factor(A::Type{<:AbstractCombination{DA}}, B::Type{<:AbstractCombinat
   mapreduce(conversion_factor, *, units_a, units_b, init=scaler_a/scaler_b)
 end
 
+abstract type NullDimension <: Dimension end
+to_combo(U::Type{<:NullDimension}) = Combination{Tuple{},Tuple{wrap(U, 1)}}
+dimensions(::Type{<:NullDimension}) = Any[]
+dimension(::Type{<:NullDimension}) = wrap(NullDimension, 1)
+abstract_dimension(::Type{<:NullDimension}) = NullDimension
+
 "unpack derived units, dedupe dimensions, and keep track of the resulting scale difference"
 simple_units(C::Type{<:AbstractCombination}) = begin
   units, scale = flatten_units(C)
@@ -302,25 +308,9 @@ pruned(T, v) = begin
   simplify(T)(v * scaler)
 end
 
-"""
-Unpack derived units within a combination. Returns a simplified type along with a scaler which
-is usefull if you a converting an instance of the input type to the simplified type
-"""
-unpack(::Type{Combination{Ds, units}}) where {Ds, units} = begin
-  subs = mapreduce(subunits, vcat, units.parameters, init=Any[])
-  isempty(subs) && return Combination{Tuple{}, Tuple{}}, 1
-  abstract_dims = map(abstract_dimension, subs)
-  output = map(unique(abstract_dims)) do d
-    like_units = subs[findall(==(d), abstract_dims)]
-    T = promote_type(map(unwrap, like_units)...)
-    out = Exponent{T, mapreduce(power, +, like_units)}
-    out, mapreduce(u->conversion_factor(u, Exponent{T,power(u)}), *, like_units)
-  end
-  simplify(Combination{Ds, Tuple{map(first, output)...}}), mapreduce(last, *, output)
-end
 unpacked(c::Combination) = begin
-  T, scaler = unpack(typeof(c))
-  T(c.value * scaler)
+  units, scale = simple_units(typeof(c))
+  simplify(Combination{Tuple{map(dimension, units)...}, Tuple{units...}})(c.value * scale)
 end
 
 for λ in (:*, :/)
@@ -375,8 +365,9 @@ const Energy = Mass * Length^2 / Time^2
 const Power = Energy/Time
 const Area = Length^2
 const Volume = Length^3
-const Pressure = Mass/Area
 const Density = Mass/Volume
+const Force = Mass*Length/Time^2
+const Pressure = Force/Area
 const Speed = Length/Time
 const Acceleration = Speed/Time
 const Jerk = Acceleration/Time
@@ -447,7 +438,7 @@ macro deriveunit(name, units, abbrev)
     magnitudes = []
   end
   quote
-    subunits, scale = flatten_units($(esc(units)))
+    subunits, scale = simple_units($(esc(units)))
     @assert scale == 1 "derived units should be defined with no scale"
     Base.@__doc__ struct $N{magnitude} <: DerivedUnit{magnitude, Tuple{subunits...}}
       value::Number
@@ -482,12 +473,6 @@ end
 @abbreviate MHz inv(ns)
 
 const gravity = 9.80665m/s^2 # http://physics.nist.gov/cgi-bin/cuu/Value?gn
-
-abstract type NullDimension <: Dimension end
-to_combo(U::Type{<:NullDimension}) = Combination{Tuple{},Tuple{wrap(U, 1)}}
-dimensions(::Type{<:NullDimension}) = Any[]
-dimension(::Type{<:NullDimension}) = wrap(NullDimension, 1)
-abstract_dimension(::Type{<:NullDimension}) = NullDimension
 
 struct ScalingUnit{magnitude} <: NullDimension
   value::Number
