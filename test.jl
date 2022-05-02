@@ -91,6 +91,7 @@
 @test round(m, 900mm) == 1m
 @test round(9.6742mm, digits=2) == 9.67mm
 @test basefactor(m*s) == 1
+@test convert(km/hr, 5minute/km) == 12km/hr
 
 @use "." kWh W mW kW MW J hr kJ K V A kV
 testset("DerivedUnit") do
