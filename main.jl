@@ -85,6 +85,7 @@ Base.inv(::Type{Exponent{d,n}}) where {d,n} = wrap(d, -n)
 Base.inv(E::Type{<:Exponent}) = wrap(get_param(E, 1), -get_param(E, 2))
 Base.inv(::Type{D}) where D<:Dimension = wrap(D, -1)
 Base.inv(C::Type{<:Combination}) = map_combo(inv, C)
+Base.inv(u::Unit) = inv(u.value)inv(typeof(u))
 Base.:^(D::Type{<:Unit}, e) = wrap(D, e)
 Base.:^(::Type{Exponent{d, e1}}, e2) where {d,e1} = wrap(d, e1 * e2)
 Base.:^(E::Type{<:Exponent}, e) = wrap(get_param(E, 1), get_param(E, 2) * e)
@@ -113,10 +114,12 @@ Base.promote_rule(::Type{Exponent{d1,e}}, ::Type{Exponent{d2,e}}) where {d1,d2,e
 Base.promote_rule(A::Type{<:Combination}, B::Type{<:Unit}) = simplify(promote_rule(A, to_combo(B)))
 Base.promote_rule(A::Type{<:Exponent}, B::Type{<:Dimension}) = promote_rule(A, wrap(B, 1))
 Base.promote_rule(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = begin
-  dims_a, dims_b = get_param(A, 1), get_param(B, 1)
+  dims_a, dims_b = sorted_dims(A), sorted_dims(B)
   @assert dims_a == dims_b "dimension mismatch"
-  Combination{dims_a, Tuple{map(promote_type, subunits(A), subunits(B))...}}
+  Combination{Tuple{dims_a...}, Tuple{map(promote_type, sorted_subunits(A), sorted_subunits(B))...}}
 end
+sorted_dims(a) = sort!(collect(dimensions(a)), by=string ∘ abstract_dimension)
+sorted_subunits(a) = sort!(collect(subunits(a)), by=string ∘ abstract_dimension)
 
 abbr(m::Magnitude) = string(get(prefixs, m.value, ""))
 scaler(U::Type{<:Exponent{d}}) where d = scaler(d)
@@ -143,7 +146,18 @@ Base.:/(n::Real, ::Type{T}) where T<:Unit = inv(T)(n)
 Base.:^(u::Unit, n::Integer) = (typeof(u)^n)(u.value^n)
 Base.convert(::Type{U}, n::Real) where U<:Unit = U(n)
 Base.convert(::Type{N}, u::U) where {N<:Real,U<:Unit} = convert(N, u.value * basefactor(U))
-Base.convert(::Type{U}, n::Unit) where U<:Unit = U(n.value * conversion_factor(typeof(n), U))
+Base.convert(::Type{U}, n::Unit) where U<:Unit = begin
+  ad = map(dimension, sorted_dims(typeof(n)))
+  bd = map(dimension, sorted_dims(U))
+  if ad == bd
+    U(n.value * conversion_factor(typeof(n), U))
+  elseif map(inv, ad) == bd
+    n = inv(n)
+    U(n.value * conversion_factor(typeof(n), U))
+  else
+    error("$(abbr(U)) not dimensionally compatable with $(abbr(typeof(n)))")
+  end
+end
 Base.convert(::Type{Combination}, d::D) where D<:Unit = to_combo(D)(d.value)
 Base.show(io::IO, t::Unit) = (write(io, seperate(t.value), abbr(typeof(t))); nothing)
 Base.isinteger(u::Unit) = isinteger(u.value)
@@ -189,9 +203,12 @@ basefactor(C::Type{<:Combination}) = begin
 end
 conversion_factor(A::Type{<:Unit}, B::Type{<:Unit}) = conversion_factor(to_combo(A), to_combo(B))
 conversion_factor(::Type{A}, ::Type{B}) where {A<:Dimension,B<:Dimension} = basefactor(A)/basefactor(B)
-conversion_factor(::Type{A}, ::Type{B}) where {A<:Exponent,B<:Exponent} = basefactor(A)/basefactor(B)
+conversion_factor(::Type{Exponent{da,ea}}, ::Type{Exponent{db,eb}}) where {da,db,ea,eb} = error("dimension mismatch")
+conversion_factor(::Type{Exponent{da,e}}, ::Type{Exponent{db,e}}) where {da,db,e} = (basefactor(da)/basefactor(db))^e
 conversion_factor(A::Type{<:AbstractCombination{DA}}, B::Type{<:AbstractCombination{DB}}) where {DA,DB} = begin
   (units_a, scaler_a), (units_b, scaler_b) = simple_units(A), simple_units(B)
+  sort!(units_a, by=string ∘ abstract_dimension)
+  sort!(units_b, by=string ∘ abstract_dimension)
   mapreduce(conversion_factor, *, units_a, units_b, init=scaler_a/scaler_b)
 end
 
@@ -229,6 +246,7 @@ dimension(D::Type{<:Dimension}) = wrap(abstract_dimension(D), 1)
 dimension(D::Type{<:Exponent}) = wrap(abstract_dimension(unwrap(D)),power(D))
 dimension(C::Type{<:Combination}) = begin
   dims = map(dimension, get_param(C, 1).parameters)
+  sort!(dims, by=string ∘ abstract_dimension)
   AbstractCombination{dimensions} where dimensions<:Tuple{dims...}
 end
 unwrap(E::Type{<:Exponent}) = ub(get_param(E, 1))

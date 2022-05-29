@@ -15,6 +15,7 @@
 @test conversion_factor(m^2,cm^2) == 10_000
 @test conversion_factor(hr^-1,s^-1) == 1//3600
 @test conversion_factor(cm^2/s, m^2/hr) == 9//25
+@test isapprox(1/5km/minute, inv(5minute/km))
 @test dimension(m²) == Exponent{<:Length,2}
 @test dimension(m/s) == AbstractCombination{<:Tuple{Exponent{<:Length,1},Exponent{<:Time,-1}}}
 @test dimension(m) == Length^1
@@ -91,6 +92,7 @@
 @test round(m, 900mm) == 1m
 @test round(9.6742mm, digits=2) == 9.67mm
 @test basefactor(m*s) == 1
+@test convert(km/hr, inv(5minute/km)) == 12km/hr
 @test convert(km/hr, 5minute/km) == 12km/hr
 
 @use "." kWh W mW kW MW J hr kJ K V A kV
