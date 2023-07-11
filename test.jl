@@ -166,3 +166,11 @@ testset("imperial") do
   @test convert(ft, 12inch) == 1ft
   @test convert(m, 1ft) ≈ (381//1250)m
 end
+
+import Dates: Hour, Minute
+@use "." pm am
+testset("time shorthand") do
+  @test 5pm - (7:30am) == Hour(9)+Minute(30)
+  @test Minute(30) - 1minute == Minute(29)
+  @test Minute(30) - 60s == Minute(29)
+end

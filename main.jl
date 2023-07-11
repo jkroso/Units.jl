@@ -532,3 +532,23 @@ scale(x::Unit) = begin
   m = Magnitude(trailing_zeros ÷ 3 * 3)
   (T*m)(x.value/m)
 end
+
+abstract type TimeOfDay{name} end
+const am = TimeOfDay{:am}
+const pm = TimeOfDay{:pm}
+Base.:*(t::Integer, ::Type{TimeOfDay{:am}}) = t>12 ? Dates.Time(0,t) : Dates.Time(t)
+Base.:*(t::Integer, ::Type{TimeOfDay{:pm}}) = Dates.Time(t+12)
+Base.:*(t::UnitRange, ::Type{TimeOfDay{:am}}) = Dates.Time(t.start, t.stop)
+Base.:*(t::UnitRange, ::Type{TimeOfDay{:pm}}) = Dates.Time(t.start+12, t.stop)
+Base.:(:)(t::Int, time::Dates.Time) = begin
+  m = Dates.minute(time)
+  Dates.Time(t, m == 0 ? Dates.hour(time) : m)
+end
+Base.show(io::IO, ::MIME"text/plain", ns::Dates.Nanosecond) = show(io, Dates.canonicalize(ns))
+Base.show(io::IO, ::MIME"text/plain", c::Dates.CompoundPeriod) = show(io, MIME("text/plain"), convert(Dates.Nanosecond, c))
+Base.promote_rule(T::Type{<:Dates.Period}, ::Type{<:Time}) = T
+Base.convert(T::Type{<:Dates.Period}, t::Time) = convert(T, Dates.Second(convert(Float64, t)))
+Base.:-(a::Dates.Period, b::Time) = -(promote(a,b)...)
+Base.:+(a::Dates.Period, b::Time) = +(promote(a,b)...)
+Base.:-(a::Time, b::Dates.Period) = -(promote(a,b)...)
+Base.:+(a::Time, b::Dates.Period) = +(promote(a,b)...)
