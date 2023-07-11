@@ -1,9 +1,9 @@
-@use "github.com/JuliaLang/Downloads.jl" download
 @use "github.com/jkroso/parse-json.jl"
 @use "." abbr scaler Dimension Time get_units
+@use Dates: unix2datetime, today
+@use Downloads: download
 @use "./utils" seperate
-import Dates: unix2datetime, today
-import Printf.@printf
+@use Printf: @printf
 
 abstract type Asset <: Dimension end
 struct Money{nation} <: Asset

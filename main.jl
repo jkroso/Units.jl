@@ -1,7 +1,7 @@
 @use "./utils.jl" get_param set_param seperate Magnitude exponents prefixs
-@use "github.com/FluxML/MacroTools.jl" => MacroTools @capture
 @use "github.com/jkroso/Prospects.jl" group mapcat
-import Dates
+@use MacroTools: @capture
+@use Dates
 
 abstract type Unit <: Number end
 abstract type Dimension <: Unit end
