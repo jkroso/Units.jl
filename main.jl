@@ -1,6 +1,7 @@
 @use "./utils.jl" get_param set_param seperate Magnitude exponents prefixs
 @use "github.com/FluxML/MacroTools.jl" => MacroTools @capture
 @use "github.com/jkroso/Prospects.jl" group mapcat
+import Dates
 
 abstract type Unit <: Number end
 abstract type Dimension <: Unit end
@@ -193,7 +194,8 @@ for λ in (:<, :>, :(==), :isless)
   end
 end
 
-Base.convert(::Type{T}, n::D) where {D<:Dimension, T<:Dimension} = T(n.value * conversion_factor(D, T))
+Base.convert(::Type{T}, n::D) where {D<:Dimension, T<:Dimension} = n isa T ? n : T(n.value * conversion_factor(D, T))
+
 basefactor(D::Type{<:Dimension}) = scaler(D)
 basefactor(D::Type{<:DerivedUnit}) = scaler(D)
 basefactor(E::Type{Exponent{d,e}}) where {d,e} = basefactor(d)^e
@@ -271,7 +273,7 @@ subunits(C::Type{<:Combination}) = parameters(parameters(C)[2])
 subunits(D::Type{<:AbstractCombination}) = parameters(parameters(D)[1])
 subunits(D::Type{<:DerivedUnit{m,units}}) where {m,units} = parameters(units)
 
-flatten_units(C::Type{<:AbstractCombination}) where u = accum_units(map(flatten_units, parameters(get_param(C, 1))), 1)
+flatten_units(C::Type{<:AbstractCombination}) = accum_units(map(flatten_units, parameters(get_param(C, 1))), 1)
 flatten_units(::Type{<:Combination{d,u}}) where {d,u} = accum_units(map(flatten_units, parameters(u)), 1)
 flatten_units(::Type{<:DerivedUnit{m,u}}) where {m,u} = accum_units(map(flatten_units, parameters(u)), m)
 flatten_units(::Type{<:Exponent{d,e}}) where {d,e} = begin
@@ -496,12 +498,18 @@ struct ScalingUnit{magnitude} <: NullDimension
   value::Number
 end
 scaler(::Type{ScalingUnit{m}}) where m = m
+scaler(s::ScalingUnit{m}) where m = s.value*m
 const Percent = ScalingUnit/1e2
 abbr(::Type{Percent}) = "%"
 const Permille = ScalingUnit/1e3
 abbr(::Type{Permille}) = "‰"
 @abbreviate ppm ScalingUnit/1e6
 @abbreviate ppb ScalingUnit/1e9
+
+Base.:-(a::Real, b::ScalingUnit) = a - a*scaler(b)
+Base.:-(a::Unit, b::ScalingUnit) = a - a*scaler(b)
+Base.:+(a::Real, b::ScalingUnit) = a + a*scaler(b)
+Base.:+(a::Unit, b::ScalingUnit) = a + a*scaler(b)
 
 abstract type Angle <: NullDimension end
 baseunit(::Type{Angle}) = Radian

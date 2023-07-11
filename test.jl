@@ -146,6 +146,10 @@ testset("dimensionless units") do
   @test 10Percent/yr * 5yr == 50Percent
   @test convert(m, 20m*(10Percent)) == 2m
   @test 100m + 100m*(10Percent) == 110m
+  @test 100AUD - 10Percent == 90AUD
+  @test 100 - 10Percent == 90
+  @test 100AUD + 10Percent == 110AUD
+  @test 100 + 10Percent == 110
   testset("Angles") do
     @test (60m/s) / (1°/minute) == 3600m/°
     @test convert(°, 1rad) == 57.29577951308232°
