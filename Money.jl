@@ -25,7 +25,11 @@ const rates = let
     try
       download("https://api.exchangerate.host/latest?base=USD", file)
     catch
-      @warn "Unable to load exchange rate data"
+      try
+        download("https://api.frankfurter.app/latest?base=USD", file)
+      catch
+        @warn "Unable to load exchange rate data"
+      end
     end
   end
   data = try
