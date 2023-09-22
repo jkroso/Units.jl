@@ -22,10 +22,17 @@ const rates = let
   file = joinpath(@__DIR__(), "rates.json")
   fstat = stat(file)
   if !ispath(fstat) || unix2datetime(fstat.mtime) < today()
-    ispath(fstat) && rm(file)
-    download("https://api.exchangerate.host/latest?base=USD", file)
+    try
+      download("https://api.exchangerate.host/latest?base=USD", file)
+    catch
+      @warn "Unable to load exchange rate data"
+    end
   end
-  data = parse(MIME("application/json"), read(file))["rates"]
+  data = try
+    parse(MIME("application/json"), read(file))["rates"]
+  catch
+    Dict{String,Float64}()
+  end
   Dict{Symbol,Rational}((Symbol(k)=>1/rationalize(v) for (k,v) in data)...)
 end
 
