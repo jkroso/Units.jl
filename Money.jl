@@ -23,13 +23,9 @@ const rates = let
   fstat = stat(file)
   if !ispath(fstat) || unix2datetime(fstat.mtime) < today()
     try
-      download("https://api.exchangerate.host/latest?base=USD", file)
+      download("https://api.frankfurter.app/latest?base=USD", file)
     catch
-      try
-        download("https://api.frankfurter.app/latest?base=USD", file)
-      catch
-        @warn "Unable to load exchange rate data"
-      end
+      @warn "Unable to load exchange rate data"
     end
   end
   data = try
