@@ -33,6 +33,7 @@ const rates = let
   catch
     Dict{String,Float64}()
   end
+  data["USD"] = 1.0
   Dict{Symbol,Rational}((Symbol(k)=>1/rationalize(v) for (k,v) in data)...)
 end
 
