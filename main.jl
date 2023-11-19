@@ -44,21 +44,32 @@ macro defunit(type, short_name)
   T = esc(name)
   if Meta.isexpr(short_name, :call, 3) && short_name.args[1] == :*
     @assert Meta.isexpr(short_name.args[2], :hcat) || Meta.isexpr(short_name.args[2], :vect)
-    abbrev = short_name.args[3]
     magnitudes = short_name.args[2].args
+    short_name = short_name.args[3]
   else
-    abbrev = short_name
     magnitudes = Any[]
   end
+  (abbrev, superscript) = match(r"([^⁽]+)(⁽[²³]+⁾)?", string(short_name)).captures
+  abbrev = String(abbrev)
+  superscript = isnothing(superscript) ? Int[] : Int[x-175 for x in Char[superscript...][2:end-1]]
   quote
     Base.@__doc__ struct $(esc(:($name{magnitude} <: $super))) value::Number end
-    $Units.short_name(::Type{<:$T}) = $(string(abbrev))
+    $Units.short_name(::Type{<:$T}) = $abbrev
     $Units.scaler(::Type{$T{m}}) where m = m
     Base.promote_rule(::Type{$T{m1}}, ::Type{$T{m2}}) where {m1,m2} = $T{m1<m2 ? m1 : m2}
-    const $(esc(abbrev)) = $T{Magnitude(0)}
+    const $(esc(Symbol(abbrev))) = $T{Magnitude(0)}
+    $(map(superscript) do s
+      :(const $(esc(Symbol(abbrev, exponents[s]))) = $T{Magnitude(0)}^$(s-1))
+    end...)
     $(map(magnitudes) do m
       for (n, sym) in prefixs
-        sym == m && return :(const $(esc(Symbol(m, abbrev))) = $T{Magnitude($n)})
+        sym != m && continue
+        return quote
+          const $(esc(Symbol(m, abbrev))) = $T{Magnitude($n)}
+          $(map(superscript) do s
+            :(const $(esc(Symbol(m, abbrev, exponents[s]))) = $T{Magnitude($n)}^$(s-1))
+          end...)
+        end
       end
       error("unknown prefix $m")
     end...)
@@ -395,9 +406,7 @@ const Snap = Jerk/Time
 const Crackle = Snap/Time
 const Pop = Crackle/Time
 
-@defunit Meter <: Length [μ c m k]m
-const m² = m^2
-const m³ = m^3
+@defunit Meter <: Length [μ c m k]m⁽²³⁾
 @abbreviate litre m³/1e3
 @abbreviate ml litre/1e3
 @abbreviate μl litre/1e6
@@ -410,25 +419,18 @@ const m³ = m^3
 @defunit Second <: Time [n m]s
 abbr(S::Type{Second{m}}) where m = begin
   m isa Magnitude && return abbr(m) * "s"
-  m == 1 && return "s"
-  m == 60 && return "minute"
-  m == 3600 && return "hr"
-  m == 3600*24 && return "day"
-  m == 3600*24*7 && return "week"
-  m == 3600*24*365 && return "yr"
-  m == 3600*24*365/12 && return "month"
   error("unknown magnitude $m")
 end
 scaler(::Type{Second{m}}) where m = exponentiable(m)
 exponentiable(m::Magnitude) = m
 exponentiable(m::Integer) = m//1
 exponentiable(m) = m
-const minute = Second{60}
-const hr = Second{3600}
-const day = Second{convert(Int, 24scaler(hr))}
-const week = Second{convert(Int, 7scaler(day))}
-const yr = Second{convert(Int, 365scaler(day))}
-const month = Second{convert(Int, scaler(yr)/12)}
+@abbreviate minute Second{60}
+@abbreviate hr Second{3600}
+@abbreviate day Second{convert(Int, 24scaler(hr))}
+@abbreviate week Second{convert(Int, 7scaler(day))}
+@abbreviate yr Second{convert(Int, 365scaler(day))}
+@abbreviate month Second{convert(Int, scaler(yr)/12)}
 Base.sleep(duration::Second) = sleep(convert(Real, duration))
 
 @defunit Kelvin <: Temperature K
