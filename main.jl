@@ -27,6 +27,7 @@ abstract type Current <: Dimension end
 abstract type Temperature <: Dimension end
 abstract type Substance <: Dimension end
 abstract type Luminosity <: Dimension end
+abstract type Substance <: Dimension end
 
 "Get the concrete units for a given dimension"
 get_units(D::Type{<:Dimension}, c::Combination) = get_units(D, typeof(c))
@@ -413,6 +414,8 @@ const Pop = Crackle/Time
 @abbreviate hectare Area{Meter{Magnitude(2)}}
 @defunit Gram <: Mass [μ m k]g
 @abbreviate ton Gram*1e6
+@defunit Mole <: Substance n
+const Nₐ = 6.02214076*10^23/n
 @defunit Ampere <: Current [m]A
 @defunit Lumen <: Luminosity lm
 @abbreviate lx lm/m²
