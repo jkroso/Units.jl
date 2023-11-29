@@ -1,4 +1,4 @@
-@use "./utils.jl" get_param set_param seperate Magnitude exponents prefixs
+@use "./utils.jl" get_param set_param seperate Magnitude exponents prefixs LogNumber
 @use "github.com/jkroso/Prospects.jl" group mapcat
 @use MacroTools: @capture
 @use Dates
@@ -107,14 +107,14 @@ tounionall(U::UnionAll) = U
 tounionall(U::DataType) = U.name.wrapper
 Base.:/(U::Type{<:Unit}, n::Real) = begin
   D = tounionall(unwrap(U))
-  m1 = convert(Magnitude, scaler(U))
-  m2 = convert(Magnitude, n^(1//power(U)))
+  m1 = convert(LogNumber, scaler(U))
+  m2 = convert(LogNumber, n^(1//power(U)))
   simplify(wrap(D{m1/m2}, power(U)))
 end
 Base.:*(U::Type{<:Unit}, n::Real) = begin
   D = tounionall(unwrap(U))
-  m1 = convert(Magnitude, scaler(U))
-  m2 = convert(Magnitude, n^(1//power(U)))
+  m1 = convert(LogNumber, scaler(U))
+  m2 = convert(LogNumber, n^(1//power(U)))
   simplify(wrap(D{m1*m2}, power(U)))
 end
 
@@ -134,8 +134,10 @@ end
 sorted_dims(a) = sort!(collect(dimensions(a)), by=string ∘ abstract_dimension)
 sorted_subunits(a) = sort!(collect(subunits(a)), by=string ∘ abstract_dimension)
 
+abbr(_) = ""
 abbr(m::Magnitude) = string(get(prefixs, m.value, ""))
 scaler(U::Type{<:Exponent{d}}) where d = scaler(d)
+scaler(U::Type{<:DerivedUnit{d}}) where d = d
 scaler(U::Type{<:Unit}) = 1
 prefix(T::Type{<:Dimension}) = abbr(scaler(T))
 
@@ -233,6 +235,7 @@ dimension(::Type{<:NullDimension}) = wrap(NullDimension, 1)
 abstract_dimension(::Type{<:NullDimension}) = NullDimension
 
 "unpack derived units, dedupe dimensions, and keep track of the resulting scale difference"
+simple_units(x) = [Exponent{x,1}], 1
 simple_units(C::Type{<:AbstractCombination}) = begin
   units, scale = flatten_units(C)
   dims = map(abstract_dimension, units)
@@ -481,12 +484,29 @@ macro deriveunit(name, units, abbrev)
   end
 end
 
+macro scaledunit(name, unit)
+  type_name = string(name, "Unit")
+  N = esc(Symbol(type_name))
+  x = eval(__module__, unit)
+  subunits, scale = simple_units(typeof(x))
+  scale *= x.value
+  quote
+    Base.@__doc__ struct $N{scale} <: DerivedUnit{scale, Tuple{$(subunits...)}} value::Number end
+    $Units.short_name(::Type{$N{s}}) where s = $(string(name))
+    $Units.scaler(::Type{$N{s}}) where s = s
+    const $(esc(name)) = $N{$scale}
+  end
+end
+
 @deriveunit Joule kg*m²/s^2 [k M]J
 @deriveunit Watt kg*m²/s^3 [m k M]W
 @abbreviate Wh W*hr
 @abbreviate kWh kW*hr
 @deriveunit Newton kg*m/s^2 [k]N
 @deriveunit Pascal N/m² [k M]Pa
+const gravity = 9.80665m/s^2 # http://physics.nist.gov/cgi-bin/cuu/Value?gn
+@scaledunit kgf 1kg*gravity
+@abbreviate tonf kgf*1e3
 @abbreviate bar Pascal*1e5
 @abbreviate mbar bar/1e3
 @deriveunit Coulomb A*s C
@@ -496,8 +516,6 @@ end
 @abbreviate Hz inv(s)
 @abbreviate kHz inv(ms)
 @abbreviate MHz inv(ns)
-
-const gravity = 9.80665m/s^2 # http://physics.nist.gov/cgi-bin/cuu/Value?gn
 
 struct ScalingUnit{magnitude} <: NullDimension
   value::Number

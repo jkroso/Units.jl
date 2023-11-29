@@ -27,12 +27,17 @@ modify_param(f, T::DataType, i) = set_param(T, i, f(get_param(T, i)))
 get_body(x::UnionAll) = get_body(x.body)
 get_body(x::DataType) = x
 
-struct Magnitude <: Real value::Int8 end
+abstract type LogNumber <: Real end
+
+struct Magnitude <: LogNumber
+  value::Int8
+end
 Base.convert(::Type{N}, m::Magnitude) where N<:Number = convert(N, Rational(10)^m.value)
 Base.convert(::Type{Magnitude}, m::Magnitude) = m
-Base.convert(::Type{Magnitude}, n::Real) = Magnitude(round(Int8, log10(n)))
-Base.promote_rule(::Type{N}, ::Type{Magnitude}) where N<:Number = N
-Base.promote_rule(::Type{<:Integer}, ::Type{Magnitude}) = Rational
+Base.convert(::Type{Magnitude}, n::Real) = Magnitude(floor(Int8, log10(n)))
+Base.promote_rule(::Type{N}, ::Type{LogNumber}) where N<:Number = N
+Base.promote_rule(::Type{<:Integer}, ::Type{LogNumber}) = Rational
+Base.promote_rule(::Type{<:LogNumber}, ::Type{<:LogNumber}) = ScaledMagnitude
 Base.:/(a::Magnitude, b::Magnitude) = Magnitude(a.value - b.value)
 Base.:*(a::Magnitude, b::Magnitude) = Magnitude(a.value + b.value)
 Base.:<(a::Magnitude, b::Magnitude) = a.value < b.value
@@ -42,9 +47,40 @@ Base.:+(a::Magnitude, b::Magnitude) = Magnitude(a.value + b.value)
 Base.:^(m::Magnitude, n::Integer) = Magnitude(m.value*n)
 Base.inv(m::Magnitude) = Magnitude(-m.value)
 const exponents = Vector{Char}("⁰¹²³⁴⁵⁶⁷⁸⁹")
-Base.show(io::IO, m::Magnitude) = begin
-  s = join((exponents[d+1] for d in reverse!(digits(abs(m.value)))))
-  write(io, "10$(m.value < 0 ? "⁻" : "")$s")
+superscript(n::Real) = string(n < 0 ? "⁻" : "", exponents[(+).(1, reverse!(digits(abs(n))))]...)
+Base.show(io::IO, m::Magnitude) = write(io, "10$(superscript(m.value))")
+
+struct ScaledMagnitude{T} <: LogNumber
+  magnitude::Int8
+  scaler::T
+end
+Base.show(io::IO, m::ScaledMagnitude) = print(io, float(m.scaler), "×10", superscript(m.magnitude))
+Base.getproperty(s::ScaledMagnitude, f::Symbol) = f == :value ? convert(Number, s) : getfield(s, f)
+Base.convert(::Type{N}, m::ScaledMagnitude) where N<:Number = convert(N, Rational(10)^m.value*m.scaler)
+Base.convert(::Type{ScaledMagnitude}, m::Magnitude) = ScaledMagnitude(m.value, 1)
+Base.convert(::Type{LogNumber}, m::Magnitude) = m
+Base.convert(::Type{LogNumber}, m::ScaledMagnitude) = m
+Base.convert(::Type{ScaledMagnitude}, n::ScaledMagnitude) = n
+Base.convert(::Type{ScaledMagnitude}, n::Real) = begin
+  mag = floor(Int8, log10(n))
+  scale = n/Rational(10)^mag
+  ScaledMagnitude(mag, isinteger(scale) ? convert(Integer, scale) : scale)
+end
+Base.:*(m::ScaledMagnitude, n::Real) = m*convert(ScaledMagnitude, n)
+Base.:*(a::ScaledMagnitude, b::ScaledMagnitude) = ScaledMagnitude(a.magnitude+b.magnitude, a.scaler*b.scaler)
+Base.:/(a::ScaledMagnitude, b::ScaledMagnitude) = ScaledMagnitude(a.magnitude-b.magnitude, a.scaler/b.scaler)
+Base.:-(a::ScaledMagnitude) = ScaledMagnitude(a.magnitude, -a.scaler)
+Base.inv(m::ScaledMagnitude) = ScaledMagnitude(-m.scaler)
+
+Base.convert(::Type{LogNumber}, n::Real) = begin
+  mag = floor(Int8, log10(n))
+  scale = n/Rational(10)^mag
+  if scale ≈ 1
+    Magnitude(mag)
+  else
+    s = round(Int, scale)
+    ScaledMagnitude(mag, s ≈ scale ? s : scale)
+  end
 end
 
 "map magnitudes to their standard name"

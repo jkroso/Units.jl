@@ -1,4 +1,4 @@
-@use "." abbr Meter Length Area Volume m scaler
+@use "." => Units abbr Meter Length Area Volume m scaler Mass kg g @scaledunit @abbreviate gravity s
 
 const acre_side = rationalize(sqrt(4046.8564224))
 
@@ -18,14 +18,20 @@ for (factor, name) in imperial_units
   @eval const $(Symbol(name, '³')) = Volume{$name}
 end
 
-const acre = Area{ImperialLength{acre_side}}
+@abbreviate acre Area{ImperialLength{acre_side}}
 
 scaler(::Type{ImperialLength{f}}) where f = f
-
 abbr(::Type{ImperialLength{f}}) where f = string(imperial_units[f])
-abbr(::Type{acre}) = "acre"
 
-Base.promote_rule(::Type{ImperialLength{f1}},::Type{ImperialLength{f2}}) where {f1,f2} =
-  ImperialLength{min(f1,f2)}
-
+Base.promote_rule(::Type{ImperialLength{a}},::Type{ImperialLength{b}}) where {a,b} = ImperialLength{min(a,b)}
 Base.promote_rule(::Type{<:ImperialLength}, ::Type{<:Meter}) = m
+
+struct ImperialMass{basefactor} <: Mass value::Real end
+@abbreviate lb ImperialMass{rationalize(0.45359237)*1000}
+Base.promote_rule(::Type{ImperialMass{a}},::Type{ImperialMass{b}}) where {a,b} = ImperialMass{min(a,b)}
+Base.promote_rule(::Type{<:ImperialMass}, ::Type{M}) where M<:Mass = M
+scaler(::Type{ImperialMass{f}}) where f = f
+
+@scaledunit slug 32.174049lb
+@scaledunit lbf 1lb*convert(ft/s^2, gravity)
+@abbreviate psi lbf/inch²
