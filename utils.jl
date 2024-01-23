@@ -73,7 +73,12 @@ Base.:-(a::ScaledMagnitude) = ScaledMagnitude(a.magnitude, -a.scaler)
 Base.inv(m::ScaledMagnitude) = ScaledMagnitude(-m.scaler)
 
 Base.convert(::Type{LogNumber}, n::Real) = begin
-  mag = floor(Int8, log10(n))
+  magnitude = log10(n)
+  mag = if round(Int8, magnitude) ≈ magnitude
+    round(Int8, magnitude)
+  else
+    floor(Int8, magnitude)
+  end
   scale = n/Rational(10)^mag
   if scale ≈ 1
     Magnitude(mag)
