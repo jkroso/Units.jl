@@ -176,6 +176,7 @@ end
 Base.convert(::Type{Combination}, d::D) where D<:Unit = to_combo(D)(d.value)
 Base.show(io::IO, t::Unit) = (write(io, seperate(t.value), abbr(typeof(t))); nothing)
 Base.isinteger(u::Unit) = isinteger(u.value)
+Base.abs(u::Unit) = abs(u.value)typeof(u)
 Base.isapprox(a::Unit, b::Unit) = isapprox(map(x->x.value, promote(a, b))...)
 Base.div(a::Unit, b::Unit) = Int(floor(a/b))
 Base.rem(a::Unit, b::Unit) = a-(floor(a/b)*b)
