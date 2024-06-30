@@ -6,6 +6,7 @@ seperate(str::String, sep = ",", k = 3) = begin
   n = length(str)
   groups = (str[max(x-k+1, 1):x] for x in reverse(n:-k:1))
   whole_part = join(groups, sep)
+  startswith(whole_part, "-,") && (whole_part = "-" * whole_part[3:end])
   length(parts) == 1 ? whole_part : join([whole_part,  parts[2]], '.')
 end
 

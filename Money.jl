@@ -1,4 +1,4 @@
-@use "github.com/jkroso/parse-json.jl"
+@use "github.com/jkroso/JSON.jl/read"
 @use "." abbr scaler Dimension Time get_units
 @use Dates: unix2datetime, today
 @use Downloads: download
