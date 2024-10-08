@@ -122,6 +122,10 @@ testset("Money") do
   @test string(1.5AUD/hr) == "1.50 AUD/hr"
   @test string(1.527AUD/hr) == "1.53 AUD/hr"
   @test convert(USD, 100AUD) != 100USD
+  @test 1.2AUD%1AUD ≈ 0.2AUD
+  @test 1.2AUD%1 ≈ 0.2AUD
+  @test 1.2AUD÷1AUD == 1
+  @test 1.2AUD÷1 == 1
 end
 
 @use "." kb kbit bit
