@@ -47,3 +47,6 @@ scaler(::Type{ImperialMass{f}}) where f = f
 @scaledunit slug 32.174049lb
 @scaledunit lbf 1lb*convert(ft/s^2, gravity)
 @abbreviate psi lbf/inch²
+
+abbr(::Type{inch}) = '"'
+abbr(::Type{ft}) = '''
