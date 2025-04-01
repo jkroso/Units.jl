@@ -85,6 +85,7 @@
 @test (km/hr)^-2 == (km^-2/hr^-2)
 @test convert(s, 1ns) ≈ 1e-9s
 @test 1m ÷ 49mm == 20
+@test 1000mm ÷ 49 == 20mm
 @test 1m % 49mm == 20mm
 @test round(900.9mm) == 901mm
 @test floor(900.1mm) == 900mm
@@ -125,7 +126,7 @@ testset("Money") do
   @test 1.2AUD%1AUD ≈ 0.2AUD
   @test 1.2AUD%1 ≈ 0.2AUD
   @test 1.2AUD÷1AUD == 1
-  @test 1.2AUD÷1 == 1
+  @test 1.2AUD÷1 == 1AUD
 end
 
 @use "." kb kbit bit
