@@ -175,6 +175,7 @@ Base.convert(::Type{U}, n::Unit) where U<:Unit = begin
 end
 Base.convert(::Type{Combination}, d::D) where D<:Unit = to_combo(D)(d.value)
 Base.show(io::IO, t::Unit) = (write(io, seperate(t.value), abbr(typeof(t))); nothing)
+Base.conj(x::Unit) = x
 Base.isinteger(u::Unit) = isinteger(u.value)
 Base.abs(u::Unit) = abs(u.value)typeof(u)
 Base.isapprox(a::Unit, b::Unit) = isapprox(map(x->x.value, promote(a, b))...)
