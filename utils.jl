@@ -56,8 +56,8 @@ struct ScaledMagnitude{T} <: LogNumber
   scaler::T
 end
 Base.show(io::IO, m::ScaledMagnitude) = print(io, float(m.scaler), "×10", superscript(m.magnitude))
-Base.getproperty(s::ScaledMagnitude, f::Symbol) = f == :value ? convert(Number, s) : getfield(s, f)
-Base.convert(::Type{N}, m::ScaledMagnitude) where N<:Number = convert(N, Rational(10)^m.value*m.scaler)
+Base.getproperty(s::ScaledMagnitude, f::Symbol) = f == :value ? Rational(10)^s.magnitude * s.scaler : getfield(s, f)
+Base.convert(::Type{N}, m::ScaledMagnitude) where N<:Number = convert(N, Rational(10)^m.magnitude * m.scaler)
 Base.convert(::Type{ScaledMagnitude}, m::Magnitude) = ScaledMagnitude(m.value, 1)
 Base.convert(::Type{LogNumber}, m::Magnitude) = m
 Base.convert(::Type{LogNumber}, m::ScaledMagnitude) = m
@@ -71,7 +71,7 @@ Base.:*(m::ScaledMagnitude, n::Real) = m*convert(ScaledMagnitude, n)
 Base.:*(a::ScaledMagnitude, b::ScaledMagnitude) = ScaledMagnitude(a.magnitude+b.magnitude, a.scaler*b.scaler)
 Base.:/(a::ScaledMagnitude, b::ScaledMagnitude) = ScaledMagnitude(a.magnitude-b.magnitude, a.scaler/b.scaler)
 Base.:-(a::ScaledMagnitude) = ScaledMagnitude(a.magnitude, -a.scaler)
-Base.inv(m::ScaledMagnitude) = ScaledMagnitude(-m.scaler)
+Base.inv(m::ScaledMagnitude) = ScaledMagnitude(-m.magnitude, 1/m.scaler)
 
 Base.convert(::Type{LogNumber}, n::Real) = begin
   magnitude = log10(n)

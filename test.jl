@@ -1,6 +1,6 @@
 @use "." dimension abstract_dimension conversion_factor abbr Combination AbstractCombination Exponent Meter Gram Second hr m mm cm km m² s g kg Length Time day yr minute ton Speed Acceleration ns basefactor
 @use "github.com/jkroso/Rutherford.jl/test.jl" @test testset
-@use "./utils" Magnitude
+@use "./utils" Magnitude ScaledMagnitude
 
 @test abbr(AbstractCombination{Tuple{m²,hr^-1}}) == "m²/hr"
 @test abbr(AbstractCombination{Tuple{m²,hr^1}}) == "m²·hr"
@@ -155,6 +155,13 @@ testset("dimensionless units") do
   @test 100 - 10Percent == 90
   @test 100AUD + 10Percent == 110AUD
   @test 100 + 10Percent == 110
+
+  testset("ScaledMagnitude") do
+    sm = ScaledMagnitude(Int8(3), 2.5)  # Represents 2.5 × 10^3
+    @test convert(Float64, inv(sm)) ≈ 1/convert(Float64, sm)
+    @test convert(Float64, inv(sm)) ≈ 1/(2.5 * 10^3)
+  end
+
   testset("Angles") do
     @test (60m/s) / (1°/minute) == 3600m/°
     @test convert(°, 1rad) == 57.29577951308232°
@@ -170,7 +177,7 @@ testset("imperial") do
   @test abbr(inch) == "inch"
   @test convert(ft, 12inch) == 1ft
   @test convert(m, 1ft) ≈ (381//1250)m
-  
+
   testset("Imperial mass units") do
     @test convert(kg, 1lb) ≈ 0.45359237kg
     @test convert(lb, 1stone) == 14lb
