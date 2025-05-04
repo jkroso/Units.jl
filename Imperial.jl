@@ -43,6 +43,7 @@ Base.promote_rule(::Type{ImperialMass{a}},::Type{ImperialMass{b}}) where {a,b} =
 Base.promote_rule(::Type{<:ImperialMass}, ::Type{M}) where M<:Mass = M
 scaler(::Type{ImperialMass{f}}) where f = f
 @abbreviate oz ImperialMass{scaler(lb)/16}
+@abbreviate stone ImperialMass{scaler(lb)*14}
 
 @scaledunit slug 32.174049lb
 @scaledunit lbf 1lb*convert(ft/s^2, gravity)
