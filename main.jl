@@ -27,7 +27,6 @@ abstract type Current <: Dimension end
 abstract type Temperature <: Dimension end
 abstract type Substance <: Dimension end
 abstract type Luminosity <: Dimension end
-abstract type Substance <: Dimension end
 
 "Get the concrete units for a given dimension"
 get_units(D::Type{<:Dimension}, c::Combination) = get_units(D, typeof(c))
