@@ -171,17 +171,25 @@ testset("dimensionless units") do
   end
 end
 
-@use "./Imperial.jl" acre inch ft lb stone
+@use "./Imperial.jl" acre inch ft lb stone inHg atm Pa psi
 testset("imperial") do
   @test convert(m², 1acre) ≈ 4046.8564224m²
-  @test abbr(inch) == "inch"
+  @test abbr(inch) == '"'
   @test convert(ft, 12inch) == 1ft
+  @test abbr(ft) == '\''
   @test convert(m, 1ft) ≈ (381//1250)m
 
   testset("Imperial mass units") do
     @test convert(kg, 1lb) ≈ 0.45359237kg
     @test convert(lb, 1stone) == 14lb
     @test convert(kg, 1stone) ≈ 6.35029318kg
+  end
+
+  testset("Imperial pressure units") do
+    @test convert(Pa, 1inHg) ≈ 3386.389Pa
+    @test convert(Pa, 1atm) == 101325Pa
+    @test convert(atm, 101325Pa) == 1atm
+    @test round(convert(psi, 1atm)) == 15psi
   end
 end
 

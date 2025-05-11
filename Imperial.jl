@@ -1,4 +1,4 @@
-@use "." => Units abbr Meter Length Area Volume m scaler Mass kg g @scaledunit @abbreviate gravity s litre
+@use "." => Units abbr Meter Length Area Volume m scaler Mass kg g @scaledunit @abbreviate gravity s litre Pa
 
 const acre_side = rationalize(sqrt(4046.8564224))
 
@@ -48,6 +48,8 @@ scaler(::Type{ImperialMass{f}}) where f = f
 @scaledunit slug 32.174049lb
 @scaledunit lbf 1lb*convert(ft/s^2, gravity)
 @abbreviate psi lbf/inch²
+@scaledunit inHg 3386.389Pa
+@scaledunit atm 101325Pa
 
 abbr(::Type{inch}) = '"'
 abbr(::Type{ft}) = '''
