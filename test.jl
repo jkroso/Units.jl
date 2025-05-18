@@ -200,3 +200,44 @@ testset("time shorthand") do
   @test Minute(30) - 1minute == Minute(29)
   @test Minute(30) - 60s == Minute(29)
 end
+
+@use BenchmarkTools...
+testset("benchmarks") do
+  @test isapprox(mean(@benchmark(1000*0.001)).time,
+                 mean(@benchmark convert(km, 1000m)).time,
+                 rtol=0.2)
+
+ @test isapprox(mean(@benchmark 1*1000).time,
+                mean(@benchmark convert(m, 1km)).time,
+                rtol=0.2)
+
+  @test isapprox(mean(@benchmark convert(hr, 3600s)).time,
+                 mean(@benchmark 3600/60/60).time,
+                 rtol=0.2)
+
+  @test isapprox(mean(@benchmark convert($(km^2/hr), 1 * $(m²/s))).time,
+                 mean(@benchmark 1 * 2500//9).time,
+                 rtol=0.5)
+
+  @test isapprox(mean(@benchmark 1m + 2m).time,
+                 mean(@benchmark 1 + 2).time,
+                 rtol=0.2)
+
+  @test isapprox(mean(@benchmark 2m + 3m).time,
+                 mean(@benchmark 2 * 3).time,
+                 rtol=0.2)
+
+  @test isapprox(mean(@benchmark 10m² / 2m).time,
+                 mean(@benchmark 10/2).time,
+                 rtol=0.2)
+
+  @test isapprox(mean(@benchmark (2m)^2).time,
+                 mean(@benchmark 2^2).time,
+                 rtol=0.2)
+
+  # ScaledMagnitude benchmarks
+  sm = ScaledMagnitude(Int8(3), 2.5)  # Represents 2.5 × 10^3
+  @test isapprox(mean(@benchmark inv($(sm))).time,
+                 mean(@benchmark inv(2.5*10^3)).time,
+                 rtol=0.2)
+end
