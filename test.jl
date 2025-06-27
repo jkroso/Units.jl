@@ -129,10 +129,10 @@ testset("Money") do
   @test 1.2AUD÷1 == 1AUD
 end
 
-@use "." kb kbit bit
+@use "." kb kB b
 testset("Data") do
-  @test convert(kb, 8000bit) == 1kb
-  @test convert(kbit, 1kb) == 8kbit
+  @test convert(kB, 8000b) == 1kB
+  @test convert(kb, 1kB) == 8kb
 end
 
 @use "." ms ns s

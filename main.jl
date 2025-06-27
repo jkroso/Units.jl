@@ -454,8 +454,8 @@ Base.convert(K::Type{<:Kelvin}, t::T) where T<:Union{Celsius,Fahrenheit} =
   K((t.value + baseoffset(T)) * basefactor(T))
 
 abstract type Data <: Dimension end
-@defunit Byte <: Data [k M G T]b
-@defunit Bit <: Data [k M G T]bit
+@defunit Byte <: Data [k M G T]B
+@defunit Bit <: Data [k M G T]b
 Base.convert(B::Type{Bit{m}}, b::Byte) where m = B(8convert(Real, b)/basefactor(B))
 Base.convert(B::Type{Byte{m}}, b::Bit) where m = B((convert(Real, b)/8)/basefactor(B))
 
