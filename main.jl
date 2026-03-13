@@ -425,15 +425,21 @@ const Nₐ = 6.02214076*10^23/n
 @defunit Ampere <: Current [m]A
 @defunit Lumen <: Luminosity lm
 @abbreviate lx lm/m²
-@defunit Second <: Time [n m]s
-abbr(S::Type{Second{m}}) where m = begin
-  m isa Magnitude && return abbr(m) * "s"
-  error("unknown magnitude $m")
-end
+# define second manually because it needs a special scaler definition
+struct Second{magnitude} <: Time value::Number end
+short_name(::Type{<:Second}) = "s"
 scaler(::Type{Second{m}}) where m = exponentiable(m)
 exponentiable(m::Magnitude) = m
 exponentiable(m::Integer) = m//1
 exponentiable(m) = m
+Base.promote_rule(::Type{Second{m1}}, ::Type{Second{m2}}) where {m1,m2} = Second{m1<m2 ? m1 : m2}
+const s = Second{Magnitude(0)}
+const ns = Second{Magnitude(-9)}
+const ms = Second{Magnitude(-3)}
+abbr(S::Type{Second{m}}) where m = begin
+  m isa Magnitude && return abbr(m) * "s"
+  error("unknown magnitude $m")
+end
 @abbreviate minute Second{60}
 @abbreviate hr Second{3600}
 @abbreviate day Second{convert(Int, 24scaler(hr))}
@@ -508,8 +514,8 @@ end
 @deriveunit Newton kg*m/s^2 [k]N
 @deriveunit Pascal N/m² [k M]Pa
 const gravity = 9.80665m/s^2 # http://physics.nist.gov/cgi-bin/cuu/Value?gn
-@scaledunit kgf 1kg*gravity
-@abbreviate tonf kgf*1e3
+# @scaledunit kgf 1kg*gravity ruins precompilation
+# @abbreviate tonf kgf*1e3
 @abbreviate bar Pascal*1e5
 @abbreviate mbar bar/1e3
 @deriveunit Coulomb A*s C
