@@ -18,23 +18,25 @@ const symbols = let
   Dict{Symbol,Symbol}((Symbol(k)=>Symbol(v["symbol"]) for (k,v) in data)...)
 end
 
-const rates = let
-  file = joinpath(@__DIR__(), "rates.json")
-  fstat = stat(file)
-  if !ispath(fstat) || unix2datetime(fstat.mtime) < today()
-    try
-      download("https://api.frankfurter.app/latest?base=USD", file)
-    catch
-      @warn "Unable to load exchange rate data"
+function __init__()
+  global rates = let
+    file = joinpath(@__DIR__(), "rates.json")
+    fstat = stat(file)
+    if !ispath(fstat) || unix2datetime(fstat.mtime) < today()
+      try
+        download("https://api.frankfurter.app/latest?base=USD", file)
+      catch
+        @warn "Unable to load exchange rate data"
+      end
     end
+    data = try
+      parse(MIME("application/json"), read(file))["rates"]
+    catch
+      Dict{String,Float64}()
+    end
+    data["USD"] = 1.0
+    Dict{Symbol,Rational}((Symbol(k)=>1/rationalize(v) for (k,v) in data)...)
   end
-  data = try
-    parse(MIME("application/json"), read(file))["rates"]
-  catch
-    Dict{String,Float64}()
-  end
-  data["USD"] = 1.0
-  Dict{Symbol,Rational}((Symbol(k)=>1/rationalize(v) for (k,v) in data)...)
 end
 
 Base.show(io::IO, d::Money{code}) where code = begin

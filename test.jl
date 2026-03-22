@@ -1,5 +1,5 @@
 @use "." dimension abstract_dimension conversion_factor abbr Combination AbstractCombination Exponent Meter Gram Second hr m mm cm km m² s g kg Length Time day yr minute ton Speed Acceleration ns basefactor
-@use "github.com/jkroso/Rutherford.jl/test.jl" @test testset
+using Test
 @use "./utils" Magnitude ScaledMagnitude
 
 @test abbr(AbstractCombination{Tuple{m²,hr^-1}}) == "m²/hr"
@@ -97,7 +97,7 @@
 @test convert(km/hr, 5minute/km) == 12km/hr
 
 @use "." kWh W mW kW MW J hr kJ K V A kV
-testset("DerivedUnit") do
+@testset "DerivedUnit" begin
   @test basefactor(kV*A) == 1000
   @test conversion_factor(kV*A, kW) == 1
   @test conversion_factor(mW, W) == 1//1000
@@ -116,7 +116,7 @@ testset("DerivedUnit") do
 end
 
 @use "./Money.jl" Wage AUD USD
-testset("Money") do
+@testset "Money" begin
   @test AUD/hr <: Wage
   @test 1.5AUD/hr isa Wage
   @test string(1AUD) == "1.00 AUD"
@@ -130,20 +130,20 @@ testset("Money") do
 end
 
 @use "." kb kB b
-testset("Data") do
+@testset "Data" begin
   @test convert(kB, 8000b) == 1kB
   @test convert(kb, 1kB) == 8kb
 end
 
 @use "." ms ns s
-testset("Sleep") do
+@testset "Sleep" begin
   @test 0.8 < @elapsed(sleep(1s)) < 1.2
   @test 0.3 < @elapsed(sleep(500ms)) < 0.7
   @test 0.001 < @elapsed(sleep(5000ns)) < 0.01
 end
 
 @use "." Percent month yr ° rad
-testset("dimensionless units") do
+@testset "dimensionless units" begin
   @test convert(Percent/month, 15Percent/yr) == 1.25Percent/month
   @test round(Percent(10.547), digits=2) == Percent(10.55)
   @test Percent/yr == Combination{Tuple{Time^-1}, Tuple{Percent^1,yr^-1}}
@@ -156,13 +156,13 @@ testset("dimensionless units") do
   @test 100AUD + 10Percent == 110AUD
   @test 100 + 10Percent == 110
 
-  testset("ScaledMagnitude") do
+  @testset "ScaledMagnitude" begin
     sm = ScaledMagnitude(Int8(3), 2.5)  # Represents 2.5 × 10^3
     @test convert(Float64, inv(sm)) ≈ 1/convert(Float64, sm)
     @test convert(Float64, inv(sm)) ≈ 1/(2.5 * 10^3)
   end
 
-  testset("Angles") do
+  @testset "Angles" begin
     @test (60m/s) / (1°/minute) == 3600m/°
     @test convert(°, 1rad) == 57.29577951308232°
     @test sin(90°) == 1
@@ -172,20 +172,20 @@ testset("dimensionless units") do
 end
 
 @use "./Imperial.jl" acre inch ft lb stone inHg atm Pa psi
-testset("imperial") do
+@testset "imperial" begin
   @test convert(m², 1acre) ≈ 4046.8564224m²
   @test abbr(inch) == '"'
   @test convert(ft, 12inch) == 1ft
   @test abbr(ft) == '\''
   @test convert(m, 1ft) ≈ (381//1250)m
 
-  testset("Imperial mass units") do
+  @testset "Imperial mass units" begin
     @test convert(kg, 1lb) ≈ 0.45359237kg
     @test convert(lb, 1stone) == 14lb
     @test convert(kg, 1stone) ≈ 6.35029318kg
   end
 
-  testset("Imperial pressure units") do
+  @testset "Imperial pressure units" begin
     @test convert(Pa, 1inHg) ≈ 3386.389Pa
     @test convert(Pa, 1atm) == 101325Pa
     @test convert(atm, 101325Pa) == 1atm
@@ -195,14 +195,53 @@ end
 
 import Dates: Hour, Minute
 @use "." pm am
-testset("time shorthand") do
+@testset "time shorthand" begin
   @test 5pm - (7:30am) == Hour(9)+Minute(30)
   @test Minute(30) - 1minute == Minute(29)
   @test Minute(30) - 60s == Minute(29)
 end
 
+@use "./Colloquial.jl" Piece piece Box Carton Pallet Bucket
+@use "." litre scaler
+@testset "Colloquial" begin
+  @testset "Piece" begin
+    @test 3piece == Piece(3)
+    @test abbr(Piece) == "pce"
+    @test scaler(Piece) == 1
+  end
+
+  @testset "Box" begin
+    @test scaler(Box{Piece(12)}) == 12
+    @test abbr(Box{Piece(12)}) == "box(12pce)"
+    @test convert(Piece, Box{Piece(12)}(3)) == Piece(36)
+    @test convert(Box{Piece(12)}, Piece(24)) == Box{Piece(12)}(2)
+  end
+
+  @testset "Carton" begin
+    @test scaler(Carton{Piece(24)}) == 24
+    @test abbr(Carton{Piece(24)}) == "carton(24pce)"
+    @test convert(Piece, Carton{Piece(24)}(2)) == Piece(48)
+  end
+
+  @testset "Pallet" begin
+    @test scaler(Pallet{Box{Piece(12)}(48)}) == 576
+    @test abbr(Pallet{Box{Piece(12)}(48)}) == "pallet(48box(12pce))"
+    @test convert(Piece, Pallet{Box{Piece(12)}(48)}(2)) == Piece(1152)
+  end
+
+  @testset "promotion" begin
+    @test promote(Box{Piece(12)}(1), Piece(6)) == (Piece(12), Piece(6))
+    @test Box{Piece(12)}(1) + Carton{Piece(24)}(1) == Piece(36)
+  end
+
+  @testset "Bucket" begin
+    @test 3Bucket{15} == 45litre
+    @test 1Bucket{1} == 1litre
+  end
+end
+
 @use BenchmarkTools...
-testset("benchmarks") do
+@testset "benchmarks" begin
   @test isapprox(mean(@benchmark(1000*0.001)).time,
                  mean(@benchmark convert(km, 1000m)).time,
                  rtol=0.2)
