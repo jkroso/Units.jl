@@ -496,7 +496,7 @@ end
 macro scaledunit(name, unit)
   type_name = string(name, "Unit")
   N = esc(Symbol(type_name))
-  x = eval(__module__, unit)
+  x = Core.eval(__module__, unit)
   subunits, scale = simple_units(typeof(x))
   scale *= x.value
   quote
