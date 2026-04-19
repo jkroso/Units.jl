@@ -4,10 +4,14 @@
 @use Downloads: download
 @use "./utils" seperate
 @use Printf: @printf
+@use FixedPointDecimals: FixedDecimal
+
+const MoneyValue = FixedDecimal{Int64, 4}
 
 abstract type Asset <: Dimension end
 struct Money{nation} <: Asset
-  value::Real
+  value::MoneyValue
+  Money{n}(v::Real) where n = new{n}(round(MoneyValue, v))
 end
 
 const Wage = Asset/Time
