@@ -52,16 +52,16 @@ Base.show(io::IO, d::Money{code}) where code = begin
   end
 end
 
+abbr(::Type{Money{c}}) where c = string(c)
+scaler(::Type{Money{abbr}}) where abbr = rates[abbr]
+Base.promote_rule(::Type{<:Money}, ::Type{<:Money}) = Money{:USD}
+
 Base.show(io::IO, wage::Wage) = begin
   A = get_units(Asset, wage)[1]
   show(io, A(wage.value))
   write(io, '/', abbr(inv(get_units(Time, wage)[1])))
   nothing
 end
-
-abbr(::Type{Money{c}}) where c = string(c)
-scaler(::Type{Money{abbr}}) where abbr = rates[abbr]
-Base.promote_rule(::Type{<:Money}, ::Type{<:Money}) = Money{:USD}
 
 for sym in [:USD :NZD :AUD :JPY :EUR :GBP]
   @eval const $sym = Money{$(QuoteNode(sym))}

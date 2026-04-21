@@ -1,4 +1,4 @@
-@use "." => Units abbr Meter Length Area Volume m scaler Mass kg g @scaledunit @abbreviate gravity s litre Pa
+@use "." => Units abbr Meter Length Area Volume m scaler Mass kg g @scaledunit @abbreviate gravity s litre Pa get_param valtype_of combine_valtype
 
 const acre_side = rationalize(sqrt(4046.8564224))
 
@@ -9,7 +9,8 @@ const imperial_units = Dict{Rational,Symbol}(
   254//10000 => :inch,
   acre_side => :acre_side)
 
-struct ImperialLength{basefactor} <: Length value::Real end
+struct ImperialLength{basefactor, T<:Number} <: Length value::T end
+ImperialLength{b}(v::T) where {b, T<:Number} = ImperialLength{b, T}(v)
 
 for (factor, name) in imperial_units
   name == :acre_side && continue
@@ -20,10 +21,15 @@ end
 
 @abbreviate acre Area{ImperialLength{acre_side}}
 
-scaler(::Type{ImperialLength{f}}) where f = f
-abbr(::Type{ImperialLength{f}}) where f = string(imperial_units[f])
+scaler(::Type{<:ImperialLength{f}}) where f = f
+abbr(::Type{<:ImperialLength{f}}) where f = string(imperial_units[f])
 
-Base.promote_rule(::Type{ImperialLength{a}},::Type{ImperialLength{b}}) where {a,b} = ImperialLength{min(a,b)}
+Base.promote_rule(A::Type{<:ImperialLength}, B::Type{<:ImperialLength}) = begin
+  a, b = get_param(A, 1), get_param(B, 1)
+  f = min(a, b)
+  V = combine_valtype(valtype_of(A), valtype_of(B))
+  isnothing(V) ? ImperialLength{f} : ImperialLength{f, V}
+end
 Base.promote_rule(::Type{<:ImperialLength}, ::Type{<:Meter}) = m
 
 const L = litre
@@ -37,11 +43,17 @@ const mL = L/1000
 @abbreviate barrel Volume{ImperialLength{cbrt(convert(m^3, 158.987294928L).value)}}
 @abbreviate fl_oz Volume{ImperialLength{cbrt(convert(m^3, 28.41306mL).value)}}
 
-struct ImperialMass{basefactor} <: Mass value::Real end
+struct ImperialMass{basefactor, T<:Number} <: Mass value::T end
+ImperialMass{b}(v::T) where {b, T<:Number} = ImperialMass{b, T}(v)
 @abbreviate lb ImperialMass{rationalize(0.45359237)*1000}
-Base.promote_rule(::Type{ImperialMass{a}},::Type{ImperialMass{b}}) where {a,b} = ImperialMass{min(a,b)}
+Base.promote_rule(A::Type{<:ImperialMass}, B::Type{<:ImperialMass}) = begin
+  a, b = get_param(A, 1), get_param(B, 1)
+  f = min(a, b)
+  V = combine_valtype(valtype_of(A), valtype_of(B))
+  isnothing(V) ? ImperialMass{f} : ImperialMass{f, V}
+end
 Base.promote_rule(::Type{<:ImperialMass}, ::Type{M}) where M<:Mass = M
-scaler(::Type{ImperialMass{f}}) where f = f
+scaler(::Type{<:ImperialMass{f}}) where f = f
 @abbreviate oz ImperialMass{scaler(lb)/16}
 @abbreviate stone ImperialMass{scaler(lb)*14}
 
@@ -51,5 +63,5 @@ scaler(::Type{ImperialMass{f}}) where f = f
 @scaledunit inHg 3386.389Pa
 @scaledunit atm 101325Pa
 
-abbr(::Type{inch}) = '"'
-abbr(::Type{ft}) = '''
+abbr(::Type{<:inch}) = '"'
+abbr(::Type{<:ft}) = '''
