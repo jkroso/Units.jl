@@ -37,10 +37,14 @@ Base.convert(::Type{N}, m::Magnitude) where N<:Number = convert(N, Rational(10)^
 Base.convert(::Type{Magnitude}, m::Magnitude) = m
 Base.convert(::Type{Magnitude}, n::Real) = Magnitude(floor(Int8, log10(n)))
 Base.promote_rule(::Type{N}, ::Type{LogNumber}) where N<:Number = N
-Base.promote_rule(::Type{<:Integer}, ::Type{LogNumber}) = Rational
+Base.promote_rule(::Type{I}, ::Type{LogNumber}) where I<:Integer = Rational{I}
 Base.promote_rule(::Type{<:LogNumber}, ::Type{<:LogNumber}) = ScaledMagnitude
 Base.:/(a::Magnitude, b::Magnitude) = Magnitude(a.value - b.value)
 Base.:*(a::Magnitude, b::Magnitude) = Magnitude(a.value + b.value)
+# Integer × Magnitude exits LogNumber-land at the multiplication site so the result
+# stays Int when the magnitude is non-negative; only fractional powers force Rational.
+Base.:*(n::Integer, m::Magnitude) = m.value ≥ 0 ? n * 10^Int(m.value) : n // 10^Int(-m.value)
+Base.:*(m::Magnitude, n::Integer) = n * m
 Base.:<(a::Magnitude, b::Magnitude) = a.value < b.value
 Base.:-(a::Magnitude) = Magnitude(-a.value)
 Base.:-(a::Magnitude, b::Magnitude) = Magnitude(a.value - b.value)
@@ -69,6 +73,8 @@ Base.convert(::Type{ScaledMagnitude}, n::Real) = begin
 end
 Base.:*(m::ScaledMagnitude, n::Real) = m*convert(ScaledMagnitude, n)
 Base.:*(a::ScaledMagnitude, b::ScaledMagnitude) = ScaledMagnitude(a.magnitude+b.magnitude, a.scaler*b.scaler)
+Base.:*(n::Integer, m::ScaledMagnitude) = (m.magnitude ≥ 0 ? n * 10^Int(m.magnitude) : n // 10^Int(-m.magnitude)) * m.scaler
+Base.:*(m::ScaledMagnitude, n::Integer) = n * m
 Base.:/(a::ScaledMagnitude, b::ScaledMagnitude) = ScaledMagnitude(a.magnitude-b.magnitude, a.scaler/b.scaler)
 Base.:-(a::ScaledMagnitude) = ScaledMagnitude(a.magnitude, -a.scaler)
 Base.inv(m::ScaledMagnitude) = ScaledMagnitude(-m.magnitude, 1/m.scaler)

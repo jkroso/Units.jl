@@ -347,7 +347,7 @@ basefactor(E::Type{<:Exponent{d,e}}) where {d,e} = basefactor(d)^e
 basefactor(E::Type{<:Exponent}) = basefactor(unwrap(E))^power(E)
 basefactor(C::Type{<:Combination}) = begin
   units = parameters(get_param(C, 2))
-  mapreduce(basefactor, *, units, init=1)
+  mapreduce(basefactor, *, units, init=Magnitude(0))
 end
 conversion_factor(A::Type{<:Unit}, B::Type{<:Unit}) = conversion_factor(to_combo(A), to_combo(B))
 conversion_factor(::Type{A}, ::Type{B}) where {A<:Dimension,B<:Dimension} = basefactor(A)/basefactor(B)
@@ -373,12 +373,12 @@ dimension(::Type{<:NullDimension}) = wrap(NullDimension, 1)
 abstract_dimension(::Type{<:NullDimension}) = NullDimension
 
 "unpack derived units, dedupe dimensions, and keep track of the resulting scale difference"
-simple_units(x) = [Exponent{x,1}], 1
+simple_units(x) = [Exponent{x,1}], Magnitude(0)
 simple_units(C::Type{<:AbstractCombination}) = begin
   units, scale = flatten_units(C)
   dims = map(abstract_dimension, units)
   nulls = units[findall(==(NullDimension), dims)]
-  scale *= mapreduce(scaler, *, nulls, init=1)
+  scale *= mapreduce(scaler, *, nulls, init=Magnitude(0))
   output = map(unique!(filter(!=(NullDimension), dims))) do d
     like_units = units[findall(==(d), dims)]
     T = promote_type(map(unwrap, like_units)...)
@@ -431,8 +431,8 @@ subunits(C::Type{<:Combination}) = parameters(parameters(C)[2])
 subunits(D::Type{<:AbstractCombination}) = parameters(parameters(D)[1])
 subunits(D::Type{<:DerivedUnit{m,units}}) where {m,units} = parameters(units)
 
-flatten_units(C::Type{<:AbstractCombination}) = accum_units(map(flatten_units, parameters(get_param(C, 1))), 1)
-flatten_units(::Type{<:Combination{d,u}}) where {d,u} = accum_units(map(flatten_units, parameters(u)), 1)
+flatten_units(C::Type{<:AbstractCombination}) = accum_units(map(flatten_units, parameters(get_param(C, 1))), Magnitude(0))
+flatten_units(::Type{<:Combination{d,u}}) where {d,u} = accum_units(map(flatten_units, parameters(u)), Magnitude(0))
 flatten_units(::Type{<:DerivedUnit{m,u}}) where {m,u} = accum_units(map(flatten_units, parameters(u)), m)
 flatten_units(::Type{<:Exponent{d,e}}) where {d,e} = begin
   units, scale = flatten_units(d)
@@ -443,7 +443,7 @@ flatten_units(E::Type{<:Exponent}) = begin
   units, scale = flatten_units(d)
   map(u->wrap(unwrap(u),power(u)*e), units), scale
 end
-flatten_units(D::Type{<:Dimension}) = Any[D], 1
+flatten_units(D::Type{<:Dimension}) = Any[D], Magnitude(0)
 accum_units(results, scale) = begin
   reduce(results, init=(AnyType[],scale)) do out, (units, scale)
     push!(out[1], units...), out[2] * scale
