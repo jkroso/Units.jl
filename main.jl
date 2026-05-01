@@ -265,14 +265,20 @@ Base.convert(::Type{N}, u::U) where {N<:Real,U<:Unit} = convert(N, u.value * bas
 Base.@assume_effects :foldable convert_plan(::Type{U}, ::Type{N}) where {U<:Unit, N<:Unit} = begin
   ad = map(dimension, sorted_dims(N))
   bd = map(dimension, sorted_dims(U))
+  # Strip U's valtype before re-binding so non-integer conversion factors can flow
+  # through; carry U's pinned valtype (if any) into the promote_type so the result
+  # is never narrower than the caller asked for.
+  Ubare = naked(U)
+  Vu = valtype_of(U)
+  widen(t::Type) = isnothing(Vu) ? t : promote_type(t, Vu)
   if ad == bd
     factor = conversion_factor(N, U)
-    out = with_valtype(U, promote_type(fieldtype(N, 1), typeof(factor)))
+    out = with_valtype(Ubare, widen(promote_type(fieldtype(N, 1), typeof(factor))))
     (factor, out, false)
   elseif map(inv, ad) == bd
     Ninv = inv(N)
     factor = conversion_factor(Ninv, U)
-    out = with_valtype(U, promote_type(fieldtype(Ninv, 1), typeof(factor)))
+    out = with_valtype(Ubare, widen(promote_type(fieldtype(Ninv, 1), typeof(factor))))
     (factor, out, true)
   else
     (nothing, U, nothing)
@@ -550,54 +556,40 @@ for λ in (:*, :/)
   @eval @generated Base.$λ(::Type{A}, ::Type{B}) where {A<:Unit, B<:Unit} = :($(combo_op($op, A, B)))
 end
 
+# Reduce a compile-time scaler to its simplest concrete numeric form so it can be
+# baked into the generated expression as a literal — collapsing Magnitude/ScaledMagnitude
+# down to Int/Rational/Float and dropping the LogNumber type-promotion side effects.
+function simplest_scaler(x)
+  r = convert(Real, x)
+  if r isa Rational && denominator(r) == 1
+    n = numerator(r)
+    typemin(Int) <= n <= typemax(Int) ? Int(n) : n
+  else
+    r
+  end
+end
+
+# Wrap `body` with the unit constructor `out`, unless the result is dimensionless
+# (out === Real), in which case the bare numeric value is the result.
+wrap_out(out, body) = out === Real ? body : :($out($body))
+
+# Apply a precomputed compile-time scaler to a runtime expression, eliding the
+# multiplication when the scaler reduces to 1.
+scale_expr(body, K) = isone(K) ? body : :($body * $K)
+
 # Helper that @generated bodies use to build the per-call expression
 function build_combo_expr(op::Symbol, UA, UB, scaler_a, scaler_b)
   T = getfield(Base, op)(UA, UB)
   Tp, scaler = prune(T)
   out = naked(simplify(Tp))
-  inner = Expr(:call, op, :(a.value * $scaler_a), :(b.value * $scaler_b))
-  :($out($inner * $scaler))
-end
-
-# Then: the value-level arithmetic. Each body precomputes the output type and scalers at
-# macro expansion, leaving only the numeric work for runtime.
-for λ in (:*, :/)
-  op = QuoteNode(λ)
-  @eval @generated function Base.$λ(a::A, ::Type{B}) where {A<:Unit,B<:Unit}
-    T = $λ(A, B)
-    Tp, scaler = prune(T)
-    out = naked(simplify(Tp))
-    :($out(a.value * $scaler))
-  end
-  @eval @generated function Base.$λ(::Type{A}, b::B) where {A<:Unit,B<:Unit}
-    T = $λ(A, B)
-    Tp, scaler = prune(T)
-    out = naked(simplify(Tp))
-    :($out(b.value * $scaler))
-  end
-  @eval @generated function Base.$λ(a::A, b::B) where {A<:Unit, B<:Unit}
-    CA, CB = to_combo(A), to_combo(B)
-    UA, scaler_a = prune(CA)
-    UB, scaler_b = prune(CB)
-    build_combo_expr($op, UA, UB, scaler_a, scaler_b)
-  end
-  @eval @generated function Base.$λ(a::A, b::B) where {A<:Unit, B<:Combination}
-    CA = to_combo(A)
-    UA, scaler_a = prune(CA)
-    UB, scaler_b = prune(B)
-    build_combo_expr($op, UA, UB, scaler_a, scaler_b)
-  end
-  @eval @generated function Base.$λ(a::A, b::B) where {A<:Combination, B<:Unit}
-    CB = to_combo(B)
-    UA, scaler_a = prune(A)
-    UB, scaler_b = prune(CB)
-    build_combo_expr($op, UA, UB, scaler_a, scaler_b)
-  end
-  @eval @generated function Base.$λ(a::A, b::B) where {A<:Combination, B<:Combination}
-    UA, scaler_a = prune(A)
-    UB, scaler_b = prune(B)
-    build_combo_expr($op, UA, UB, scaler_a, scaler_b)
-  end
+  # Algebraically:
+  #   *: (a*sa) * (b*sb) * s  ==  a*b * (sa*sb*s)
+  #   /: (a*sa) / (b*sb) * s  ==  a/b * (sa*s/sb)
+  K = simplest_scaler(op === :* ? scaler_a * scaler_b * scaler
+                                 : (scaler_a * scaler) / scaler_b)
+  core = Expr(:call, op, :(a.value), :(b.value))
+  result = wrap_out(out, scale_expr(core, K))
+  result
 end
 
 const Energy = Mass * Length^2 / Time^2
@@ -727,7 +719,6 @@ end
 @abbreviate kWh kW*hr
 @deriveunit Newton kg*m/s^2 [k]N
 @deriveunit Pascal N/m² [k M]Pa
-const gravity = 9.80665m/s^2 # http://physics.nist.gov/cgi-bin/cuu/Value?gn
 # @scaledunit kgf 1kg*gravity ruins precompilation
 # @abbreviate tonf kgf*1e3
 @abbreviate bar Pascal*1e5
@@ -805,3 +796,53 @@ Base.:-(a::Dates.Period, b::Time) = -(promote(a,b)...)
 Base.:+(a::Dates.Period, b::Time) = +(promote(a,b)...)
 Base.:-(a::Time, b::Dates.Period) = -(promote(a,b)...)
 Base.:+(a::Time, b::Dates.Period) = +(promote(a,b)...)
+
+# Value-level arithmetic. Each body precomputes the output type and scalers at macro
+# expansion, leaving only the numeric work for runtime. Defined at the bottom of the
+# file so the generators see all `@defunit`/`@deriveunit` `scaler` methods — otherwise
+# `basefactor(Meter{Magnitude(3)})` falls through to the default `scaler(::Unit) = 1`
+# and per-unit magnitudes silently disappear from the result (e.g. `1km*2m == 2m²`).
+for λ in (:*, :/)
+  op = QuoteNode(λ)
+  @eval @generated function Base.$λ(a::A, ::Type{B}) where {A<:Unit,B<:Unit}
+    T = $λ(A, B)
+    Tp, scaler = prune(T)
+    out = naked(simplify(Tp))
+    K = simplest_scaler(scaler)
+    wrap_out(out, scale_expr(:(a.value), K))
+  end
+  @eval @generated function Base.$λ(::Type{A}, b::B) where {A<:Unit,B<:Unit}
+    T = $λ(A, B)
+    Tp, scaler = prune(T)
+    out = naked(simplify(Tp))
+    K = simplest_scaler(scaler)
+    wrap_out(out, scale_expr(:(b.value), K))
+  end
+  @eval @generated function Base.$λ(a::A, b::B) where {A<:Unit, B<:Unit}
+    CA, CB = to_combo(A), to_combo(B)
+    UA, scaler_a = prune(CA)
+    UB, scaler_b = prune(CB)
+    build_combo_expr($op, UA, UB, scaler_a, scaler_b)
+  end
+  @eval @generated function Base.$λ(a::A, b::B) where {A<:Unit, B<:Combination}
+    CA = to_combo(A)
+    UA, scaler_a = prune(CA)
+    UB, scaler_b = prune(B)
+    build_combo_expr($op, UA, UB, scaler_a, scaler_b)
+  end
+  @eval @generated function Base.$λ(a::A, b::B) where {A<:Combination, B<:Unit}
+    CB = to_combo(B)
+    UA, scaler_a = prune(A)
+    UB, scaler_b = prune(CB)
+    build_combo_expr($op, UA, UB, scaler_a, scaler_b)
+  end
+  @eval @generated function Base.$λ(a::A, b::B) where {A<:Combination, B<:Combination}
+    UA, scaler_a = prune(A)
+    UB, scaler_b = prune(B)
+    build_combo_expr($op, UA, UB, scaler_a, scaler_b)
+  end
+end
+
+# Defined after the value-level arithmetic generators above so that the generators
+# see the right `scaler` methods (otherwise per-unit magnitudes silently disappear).
+const gravity = 9.80665m/s^2 # http://physics.nist.gov/cgi-bin/cuu/Value?gn
