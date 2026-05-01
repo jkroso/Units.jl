@@ -39,6 +39,8 @@
   @test (1m²)^2 == 1m^4
   @test (2m²)^2 == (2m²)*(2m²)
   @test convert(m^3, 1000_000_000mm^3) == 1m^3
+  @test isbitstype(typeof(convert(m^3, 5mm^3)))
+  @test isbitstype(typeof(convert(km, 1000m)))
   @test promote(1cm^2, 1m²) == (1cm^2, 10_000cm^2)
   @test sqrt(100m^2) == 10m
   @test promote(1mm, 2m) == (1mm, 2000mm)

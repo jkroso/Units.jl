@@ -261,25 +261,26 @@ Base.:/(n::Real, ::Type{T}) where T<:Unit = naked(inv(T))(n)
 Base.:^(u::Unit, n::Integer) = (typeof(u)^n)(u.value^n)
 Base.convert(::Type{U}, n::Real) where U<:Unit = U(n)
 Base.convert(::Type{N}, u::U) where {N<:Real,U<:Unit} = convert(N, u.value * basefactor(U))
-# Helper that's pure w.r.t. its type arguments: computes (factor, output_type, inverted?)
+# Helper that's pure w.r.t. its type arguments: computes (factor, output_type, inverted?).
+# Pin the output valtype to whatever `n.value * factor` actually produces — using
+# `promote_type` here would fall back to abstract `Real` for `Int * Magnitude`, leaving
+# the result struct non-isbits. If the caller pinned a valtype on U we widen with it so
+# the explicit request still flows through.
 Base.@assume_effects :foldable convert_plan(::Type{U}, ::Type{N}) where {U<:Unit, N<:Unit} = begin
   ad = map(dimension, sorted_dims(N))
   bd = map(dimension, sorted_dims(U))
-  # Strip U's valtype before re-binding so non-integer conversion factors can flow
-  # through; carry U's pinned valtype (if any) into the promote_type so the result
-  # is never narrower than the caller asked for.
   Ubare = naked(U)
   Vu = valtype_of(U)
   widen(t::Type) = isnothing(Vu) ? t : promote_type(t, Vu)
   if ad == bd
     factor = conversion_factor(N, U)
-    out = with_valtype(Ubare, widen(promote_type(fieldtype(N, 1), typeof(factor))))
-    (factor, out, false)
+    V = typeof(oneunit(fieldtype(N, 1)) * factor)
+    (factor, with_valtype(Ubare, widen(V)), false)
   elseif map(inv, ad) == bd
     Ninv = inv(N)
     factor = conversion_factor(Ninv, U)
-    out = with_valtype(Ubare, widen(promote_type(fieldtype(Ninv, 1), typeof(factor))))
-    (factor, out, true)
+    V = typeof(oneunit(fieldtype(Ninv, 1)) * factor)
+    (factor, with_valtype(Ubare, widen(V)), true)
   else
     (nothing, U, nothing)
   end
