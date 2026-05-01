@@ -1,6 +1,6 @@
 @use "." dimension abstract_dimension conversion_factor abbr Combination AbstractCombination Exponent Meter Gram Second hr m mm cm km m² s g kg Length Time day yr minute ton Speed Acceleration ns basefactor
-using Test
 @use "./utils" Magnitude ScaledMagnitude
+@use Test...
 
 @testset "basics" begin
   @test abbr(AbstractCombination{Tuple{m²,hr^-1}}) == "m²/hr"
