@@ -6,7 +6,7 @@
 @use Printf: @printf
 @use FixedPointDecimals: FixedDecimal
 
-const MoneyValue = FixedDecimal{Int64, 4}
+const MoneyValue = FixedDecimal{Int128, 12}
 
 abstract type Asset <: Dimension end
 struct Money{nation} <: Asset
