@@ -119,6 +119,7 @@ end
   @test 1kW*5m/kW == 5m
 end
 
+@use "./Money.jl" => MoneyModule
 @use "./Money.jl" Wage AUD USD
 @testset "Money" begin
   @test AUD/hr <: Wage
@@ -126,11 +127,30 @@ end
   @test string(1AUD) == "1.00 AUD"
   @test string(1.5AUD/hr) == "1.50 AUD/hr"
   @test string(1.527AUD/hr) == "1.53 AUD/hr"
-  @test convert(USD, 100AUD) != 100USD
+  # Same-currency arithmetic never consults a rate.
   @test 1.2AUD%1AUD ≈ 0.2AUD
   @test 1.2AUD%1 ≈ 0.2AUD
   @test 1.2AUD÷1AUD == 1
   @test 1.2AUD÷1 == 1AUD
+end
+
+@testset "Money conversion needs a rate source" begin
+  # No source registered: crossing currencies errors rather than guessing.
+  @test_throws ErrorException convert(USD, 100AUD)
+  @test_throws ErrorException 100AUD + 100USD
+
+  # A consumer supplies one by extending the generic. `exchange_rate` is
+  # deliberately per-call so a consumer can consult live or dated data.
+  MoneyModule.exchange_rate(from::Symbol, to::Symbol) =
+    from === to ? 1//1 :
+    from === :AUD && to === :USD ? 2//3 :
+    from === :USD && to === :AUD ? 3//2 :
+    error("unexpected pair $from → $to")
+
+  @test convert(USD, 150AUD) == 100USD
+  @test convert(AUD, 100USD) == 150AUD
+  @test 100AUD + 150AUD == 250AUD          # still no conversion
+  @test 150AUD + 100USD == 200USD          # promotes to USD, per promote_rule
 end
 
 @use "." kb kB b

@@ -1,7 +1,5 @@
 @use "github.com/jkroso/JSON.jl/read"
 @use "." abbr scaler Dimension Time get_units
-@use Dates: unix2datetime, today
-@use Downloads: download
 @use "./utils" seperate
 @use Printf: @printf
 @use FixedPointDecimals: FixedDecimal
@@ -22,26 +20,29 @@ const symbols = let
   Dict{Symbol,Symbol}((Symbol(k)=>Symbol(v["symbol"]) for (k,v) in data)...)
 end
 
-function __init__()
-  global rates = let
-    file = joinpath(@__DIR__(), "rates.json")
-    fstat = stat(file)
-    if !ispath(fstat) || unix2datetime(fstat.mtime) < today()
-      try
-        download("https://api.frankfurter.app/latest?base=USD", file)
-      catch
-        @warn "Unable to load exchange rate data"
-      end
-    end
-    data = try
-      parse(MIME("application/json"), read(file))["rates"]
-    catch
-      Dict{String,Float64}()
-    end
-    data["USD"] = 1.0
-    Dict{Symbol,Rational}((Symbol(k)=>1/rationalize(v) for (k,v) in data)...)
-  end
-end
+"""
+    exchange_rate(from::Symbol, to::Symbol)
+
+Rate of `to` per 1 unit of `from`, as a `Real` (a `Rational` keeps conversion exact).
+
+Units.jl ships no exchange-rate data. Rates are a property of a moment and often of a
+consumer's own record-keeping — an accounting system reporting a prior quarter needs the
+rate it filed with, not today's — so guessing one is worse than refusing. A consumer
+supplies rates by adding a method:
+
+    Units.Money.exchange_rate(from::Symbol, to::Symbol) = my_rate_lookup(from, to)
+
+Until one does, any operation that would cross currencies errors instead of silently
+converting.
+"""
+function exchange_rate end
+
+exchange_rate(from, to) = error("""
+  Units.Money has no exchange-rate source, so it cannot convert $from → $to.
+  Add a method to supply one:
+
+      Units.Money.exchange_rate(from::Symbol, to::Symbol) = ...
+  """)
 
 Base.show(io::IO, d::Money{code}) where code = begin
   n = seperate(sprint((io, x)->@printf(io, "%0.2f", x), d.value))
@@ -53,7 +54,7 @@ Base.show(io::IO, d::Money{code}) where code = begin
 end
 
 abbr(::Type{Money{c}}) where c = string(c)
-scaler(::Type{Money{abbr}}) where abbr = rates[abbr]
+scaler(::Type{Money{c}}) where c = exchange_rate(c, :USD)
 Base.promote_rule(::Type{<:Money}, ::Type{<:Money}) = Money{:USD}
 
 Base.show(io::IO, wage::Wage) = begin
