@@ -482,19 +482,39 @@ end
 "deduplicate units in a combination while also keeping track of the scale difference between input and output types"
 prune(T::Type{<:Unit}) = T, 1
 prune(::Type{<:Combination{Ds, units}}) where {Ds, units} = begin
-  dims = map(abstract_dimension, units.parameters)
+  dims = map(alias_dimension, units.parameters)
   isempty(dims) && return Combination{Tuple{}, Tuple{}}, 1
   output = map(unique(dims)) do d
     like_units = units.parameters[findall(==(d), dims)]
-    # A unit that meets only itself needs no factor. Asking for one would
-    # evaluate its scaler, and a currency's is an exchange rate to USD:
+    # A unit that meets only itself needs no factor, and keeps its name:
+    # kg/Sheet stays kg/Sheet as kg/hectare does. Asking for a factor would
+    # also evaluate its scaler, and a currency's is an exchange rate to USD:
     # `1.5AUD/hr` must not need a rate source.
     length(like_units) == 1 && return like_units[1], 1
+    expanded = map(expand_alias, like_units)
+    like_units = map(first, expanded)
     T = promote_type(map(unwrap, like_units)...)
     out = Exponent{T, mapreduce(power, +, like_units)}
-    out, mapreduce(u->conversion_factor(u, Exponent{T,power(u)}), *, like_units)
+    factor = mapreduce(u->conversion_factor(u, Exponent{T,power(u)}), *, like_units)
+    out, factor * mapreduce(last, *, expanded)
   end
   Combination{Ds, Tuple{filter!(!ispointless, map(first, output))...}}, mapreduce(last, *, output)
+end
+
+# A derived unit over a single unit — a sheet of plasterboard, 2.88 m² — is an
+# alias of that unit at a scale, and meets other units of its dimension as
+# that unit: m²/Sheet is a number, as m²/hectare is. One over several base
+# units, a joule, is its own name: J/N stays J/N.
+is_alias(D) = D <: DerivedUnit && length(subunits(D)) == 1
+alias_dimension(E) = begin
+  D = unwrap(E)
+  is_alias(D) ? abstract_dimension(only(subunits(D))) : abstract_dimension(E)
+end
+expand_alias(E) = begin
+  D = unwrap(E)
+  is_alias(D) || return E, 1
+  sub = only(subunits(D))
+  Exponent{unwrap(sub), power(sub) * power(E)}, scaler(D)^power(E)
 end
 
 "Takes a Unit and a value and produces an instance of the simplest version of that type"

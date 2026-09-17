@@ -286,6 +286,26 @@ Base.promote_rule(::Type{<:Stick}, ::Type{<:Meter}) = m
   @test 2m * 3m === 6m²        # a scale of one keeps an Int an Int
 end
 
+# A derived unit over one unit is that unit at a scale, and its arithmetic
+# says so: a sheet of plasterboard is 2.88 m², so m²/Sheet is a count of
+# sheets. One over several base units keeps its name: J/N stays J/N.
+@use "." DerivedUnit Exponent N
+struct Sheet{w,l} <: DerivedUnit{nothing, Tuple{Exponent{Meter{Magnitude(0)}, 2}}} value::Int end
+scaler(::Type{Sheet{w,l}}) where {w,l} = convert(Real, w) * convert(Real, l)
+abbr(::Type{Sheet{w,l}}) where {w,l} = "Sheet{$(w)×$(l)}"
+@testset "a derived unit over one unit combines as that unit" begin
+  S = Sheet{1.2m, 2.4m}
+  @test convert(m², 1S) == 2.88m²
+  @test convert(S, 28.8m²) == 10S
+  @test 27m² / 1S ≈ 9.375
+  @test ceil(Int, 10m * 2.7m / 1S) == 10
+  @test 3S / 1S == 3
+  @test 1S * 2 == 2S
+  @test abbr(typeof(6.24kg / 1S)) == "kg/Sheet{1.2m×2.4m}"
+  @test 19S * (6.24kg / 1S) ≈ 118.56kg
+  @test abbr(typeof(2J / 1N)) == "J/N"
+end
+
 @use BenchmarkTools...
 @testset "benchmarks" begin
   @test isapprox(mean(@benchmark(1000*0.001)).time,
