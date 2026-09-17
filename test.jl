@@ -264,6 +264,28 @@ end
   end
 end
 
+# A unit defined after Units.jl — in another file, or here — must scale
+# arithmetic the way it scales `convert`. The value-level `*` and `/` used to
+# be @generated, which only ever saw the `scaler` and `promote_rule` methods
+# above them in main.jl: `12m/1ft` was 12.
+@use "." Length
+@use "./Imperial.jl" ft²
+struct Stick{l} <: Length value::Int end
+scaler(::Type{Stick{l}}) where l = l.value * scaler(typeof(l))
+Base.promote_rule(::Type{<:Stick}, ::Type{<:Meter}) = m
+@testset "units defined later scale arithmetic" begin
+  @test 12m / 1ft ≈ 39.37007874015748
+  @test 12inch / 1ft == 1
+  @test 1ft * 1ft == 1ft²
+  @test 24piece / 1Box{Piece(12)} == 2
+  @test 12m / 1Stick{6m} == 2
+  @test 1Stick{6m} / 1m == 6
+  @test 2Stick{6m} * 3m == 36m²
+  @test convert(mm, 1Stick{6m}) == 6000mm
+  @test 12m / 1Stick{6mm} == 2000
+  @test 2m * 3m === 6m²        # a scale of one keeps an Int an Int
+end
+
 @use BenchmarkTools...
 @testset "benchmarks" begin
   @test isapprox(mean(@benchmark(1000*0.001)).time,

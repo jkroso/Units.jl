@@ -350,9 +350,9 @@ basefactor(C::Type{<:Combination}) = begin
   mapreduce(basefactor, *, units, init=Magnitude(0))
 end
 conversion_factor(A::Type{<:Unit}, B::Type{<:Unit}) = conversion_factor(to_combo(A), to_combo(B))
-conversion_factor(::Type{A}, ::Type{B}) where {A<:Dimension,B<:Dimension} = basefactor(A)/basefactor(B)
+conversion_factor(::Type{A}, ::Type{B}) where {A<:Dimension,B<:Dimension} = A === B ? 1 : basefactor(A)/basefactor(B)
 conversion_factor(::Type{<:Exponent{da,ea}}, ::Type{<:Exponent{db,eb}}) where {da,db,ea,eb} = error("dimension mismatch")
-conversion_factor(::Type{<:Exponent{da,e}}, ::Type{<:Exponent{db,e}}) where {da,db,e} = (basefactor(da)/basefactor(db))^e
+conversion_factor(::Type{<:Exponent{da,e}}, ::Type{<:Exponent{db,e}}) where {da,db,e} = da === db ? 1 : (basefactor(da)/basefactor(db))^e
 conversion_factor(A::Type{<:Exponent}, B::Type{<:Exponent}) = begin
   da, ea = unwrap(A), power(A)
   db, eb = unwrap(B), power(B)
@@ -433,7 +433,9 @@ subunits(D::Type{<:DerivedUnit{m,units}}) where {m,units} = parameters(units)
 
 flatten_units(C::Type{<:AbstractCombination}) = accum_units(map(flatten_units, parameters(get_param(C, 1))), Magnitude(0))
 flatten_units(::Type{<:Combination{d,u}}) where {d,u} = accum_units(map(flatten_units, parameters(u)), Magnitude(0))
-flatten_units(::Type{<:DerivedUnit{m,u}}) where {m,u} = accum_units(map(flatten_units, parameters(u)), m)
+# A derived unit's scale is `scaler(D)`, so a subtype can work it out from its
+# own parameters rather than carry it as the first one.
+flatten_units(D::Type{<:DerivedUnit{m,u}}) where {m,u} = accum_units(map(flatten_units, parameters(u)), scaler(D))
 flatten_units(::Type{<:Exponent{d,e}}) where {d,e} = begin
   units, scale = flatten_units(d)
   map(u->wrap(unwrap(u),power(u)*e), units), scale
@@ -484,6 +486,10 @@ prune(::Type{<:Combination{Ds, units}}) where {Ds, units} = begin
   isempty(dims) && return Combination{Tuple{}, Tuple{}}, 1
   output = map(unique(dims)) do d
     like_units = units.parameters[findall(==(d), dims)]
+    # A unit that meets only itself needs no factor. Asking for one would
+    # evaluate its scaler, and a currency's is an exchange rate to USD:
+    # `1.5AUD/hr` must not need a rate source.
+    length(like_units) == 1 && return like_units[1], 1
     T = promote_type(map(unwrap, like_units)...)
     out = Exponent{T, mapreduce(power, +, like_units)}
     out, mapreduce(u->conversion_factor(u, Exponent{T,power(u)}), *, like_units)
@@ -536,9 +542,9 @@ combine_types(op, A::Type{<:Combination}, B::Type{<:Combination}) = begin
   combine(filter!(!ispointless, wrapped), units)
 end
 
-# Pure type-level arithmetic: compute the output type for op(A, B) at compile-time.
-# Returns a type, never an Expr — safe to call inside @generated bodies.
-combo_op(op, A::Type, B::Type) = begin
+# Pure type-level arithmetic: the output type for op(A, B). Foldable, so a
+# call with known types costs nothing at runtime.
+Base.@assume_effects :foldable combo_op(op, A::Type, B::Type) = begin
   A <: DerivedUnit && return combo_op(op, to_combo(A), B)
   B <: DerivedUnit && return combo_op(op, A, to_combo(B))
   if A <: Combination && B <: Combination
@@ -554,7 +560,7 @@ end
 
 for λ in (:*, :/)
   op = QuoteNode(λ)
-  @eval @generated Base.$λ(::Type{A}, ::Type{B}) where {A<:Unit, B<:Unit} = :($(combo_op($op, A, B)))
+  @eval Base.$λ(::Type{A}, ::Type{B}) where {A<:Unit, B<:Unit} = combo_op($op, A, B)
 end
 
 # Reduce a compile-time scaler to its simplest concrete numeric form so it can be
@@ -568,29 +574,6 @@ function simplest_scaler(x)
   else
     r
   end
-end
-
-# Wrap `body` with the unit constructor `out`, unless the result is dimensionless
-# (out === Real), in which case the bare numeric value is the result.
-wrap_out(out, body) = out === Real ? body : :($out($body))
-
-# Apply a precomputed compile-time scaler to a runtime expression, eliding the
-# multiplication when the scaler reduces to 1.
-scale_expr(body, K) = isone(K) ? body : :($body * $K)
-
-# Helper that @generated bodies use to build the per-call expression
-function build_combo_expr(op::Symbol, UA, UB, scaler_a, scaler_b)
-  T = getfield(Base, op)(UA, UB)
-  Tp, scaler = prune(T)
-  out = naked(simplify(Tp))
-  # Algebraically:
-  #   *: (a*sa) * (b*sb) * s  ==  a*b * (sa*sb*s)
-  #   /: (a*sa) / (b*sb) * s  ==  a/b * (sa*s/sb)
-  K = simplest_scaler(op === :* ? scaler_a * scaler_b * scaler
-                                 : (scaler_a * scaler) / scaler_b)
-  core = Expr(:call, op, :(a.value), :(b.value))
-  result = wrap_out(out, scale_expr(core, K))
-  result
 end
 
 const Energy = Mass * Length^2 / Time^2
@@ -798,52 +781,49 @@ Base.:+(a::Dates.Period, b::Time) = +(promote(a,b)...)
 Base.:-(a::Time, b::Dates.Period) = -(promote(a,b)...)
 Base.:+(a::Time, b::Dates.Period) = +(promote(a,b)...)
 
-# Value-level arithmetic. Each body precomputes the output type and scalers at macro
-# expansion, leaving only the numeric work for runtime. Defined at the bottom of the
-# file so the generators see all `@defunit`/`@deriveunit` `scaler` methods — otherwise
-# `basefactor(Meter{Magnitude(3)})` falls through to the default `scaler(::Unit) = 1`
-# and per-unit magnitudes silently disappear from the result (e.g. `1km*2m == 2m²`).
+# Value-level arithmetic. The output type and the scale the numbers are
+# multiplied by are a pure function of the two types, so a plan computes them
+# once per call site and the compiler folds it away, as it does `convert_plan`.
+# Not `@generated`: a generator runs in the world age its function was defined
+# in, so it saw only the `scaler` and `promote_rule` methods above it in this
+# file. Every unit another file adds — Imperial's ft, Colloquial's Box, a
+# package's own — fell through to `scaler(::Unit) = 1`, and `12m/1ft` was 12.
+# A call at runtime sees them all.
+Base.@assume_effects :foldable function combo_plan(op::Symbol, ::Type{A}, ::Type{B}) where {A<:Unit, B<:Unit}
+  UA, scaler_a = prune(to_combo(A))
+  UB, scaler_b = prune(to_combo(B))
+  Tp, scaler = prune(combo_op(op, UA, UB))
+  # Algebraically:
+  #   *: (a*sa) * (b*sb) * s  ==  a*b * (sa*sb*s)
+  #   /: (a*sa) / (b*sb) * s  ==  a/b * (sa*s/sb)
+  K = simplest_scaler(op === :* ? scaler_a * scaler_b * scaler : (scaler_a * scaler) / scaler_b)
+  naked(simplify(Tp)), K
+end
+# A value against a bare type: `5m * km`, `1hr / s`.
+Base.@assume_effects :foldable function unit_plan(op::Symbol, ::Type{A}, ::Type{B}) where {A<:Unit, B<:Unit}
+  Tp, scaler = prune(combo_op(op, A, B))
+  naked(simplify(Tp)), simplest_scaler(scaler)
+end
+# A dimensionless result (`out === Real`) is the bare number. A scale of one
+# is skipped so an Int value stays Int.
+apply_plan(out, v, K) = begin
+  v = isone(K) ? v : v * K
+  out === Real ? v : out(v)
+end
 for λ in (:*, :/)
   op = QuoteNode(λ)
-  @eval @generated function Base.$λ(a::A, ::Type{B}) where {A<:Unit,B<:Unit}
-    T = $λ(A, B)
-    Tp, scaler = prune(T)
-    out = naked(simplify(Tp))
-    K = simplest_scaler(scaler)
-    wrap_out(out, scale_expr(:(a.value), K))
+  @eval Base.$λ(a::A, b::B) where {A<:Unit, B<:Unit} = begin
+    out, K = combo_plan($op, A, B)
+    apply_plan(out, $λ(a.value, b.value), K)
   end
-  @eval @generated function Base.$λ(::Type{A}, b::B) where {A<:Unit,B<:Unit}
-    T = $λ(A, B)
-    Tp, scaler = prune(T)
-    out = naked(simplify(Tp))
-    K = simplest_scaler(scaler)
-    wrap_out(out, scale_expr(:(b.value), K))
+  @eval Base.$λ(a::A, ::Type{B}) where {A<:Unit, B<:Unit} = begin
+    out, K = unit_plan($op, A, B)
+    apply_plan(out, a.value, K)
   end
-  @eval @generated function Base.$λ(a::A, b::B) where {A<:Unit, B<:Unit}
-    CA, CB = to_combo(A), to_combo(B)
-    UA, scaler_a = prune(CA)
-    UB, scaler_b = prune(CB)
-    build_combo_expr($op, UA, UB, scaler_a, scaler_b)
-  end
-  @eval @generated function Base.$λ(a::A, b::B) where {A<:Unit, B<:Combination}
-    CA = to_combo(A)
-    UA, scaler_a = prune(CA)
-    UB, scaler_b = prune(B)
-    build_combo_expr($op, UA, UB, scaler_a, scaler_b)
-  end
-  @eval @generated function Base.$λ(a::A, b::B) where {A<:Combination, B<:Unit}
-    CB = to_combo(B)
-    UA, scaler_a = prune(A)
-    UB, scaler_b = prune(CB)
-    build_combo_expr($op, UA, UB, scaler_a, scaler_b)
-  end
-  @eval @generated function Base.$λ(a::A, b::B) where {A<:Combination, B<:Combination}
-    UA, scaler_a = prune(A)
-    UB, scaler_b = prune(B)
-    build_combo_expr($op, UA, UB, scaler_a, scaler_b)
+  @eval Base.$λ(::Type{A}, b::B) where {A<:Unit, B<:Unit} = begin
+    out, K = unit_plan($op, A, B)
+    apply_plan(out, b.value, K)
   end
 end
 
-# Defined after the value-level arithmetic generators above so that the generators
-# see the right `scaler` methods (otherwise per-unit magnitudes silently disappear).
 const gravity = 9.80665m/s^2 # http://physics.nist.gov/cgi-bin/cuu/Value?gn
