@@ -335,6 +335,42 @@ for λ in (:<, :>, :(==), :isless)
   end
 end
 
+"""
+A range of units: the range of their values in one unit, read back in it,
+so it steps the way plain numbers do. `0.6m:0.2m:3m` ends at 3m (its ends
+promote, as `0.6:0.2:3`'s do), `0.1m:0.1m:0.3m` has three elements rather
+than drifting short, and `600mm:200mm:3m` is in mm, the finer unit.
+"""
+struct QuantityRange{T<:Unit, R<:AbstractRange{<:Real}} <: AbstractRange{T}
+  values::R
+end
+QuantityRange{U}(values::AbstractRange{<:Real}) where U<:Unit = begin
+  T = typeof(naked(U)(zero(eltype(values))))
+  QuantityRange{T, typeof(values)}(values)
+end
+Base.size(r::QuantityRange) = size(r.values)
+Base.length(r::QuantityRange) = length(r.values)
+Base.isempty(r::QuantityRange) = isempty(r.values)
+Base.first(r::QuantityRange{T}) where T = T(first(r.values))
+Base.last(r::QuantityRange{T}) where T = T(last(r.values))
+Base.step(r::QuantityRange{T}) where T = T(step(r.values))
+Base.getindex(r::QuantityRange{T}, i::Integer) where T = T(r.values[i])
+Base.getindex(r::QuantityRange{T}, s::AbstractRange{<:Integer}) where T = QuantityRange{T}(r.values[s])
+Base.iterate(r::QuantityRange, i=1) = i > length(r) ? nothing : (r[i], i + 1)
+
+quantity_range(start::Unit, step::Unit, stop::Unit) = begin
+  U = promote_type(typeof(start), typeof(step), typeof(stop))
+  a, s, b = (x isa U ? x : convert(U, x) for x in (start, step, stop))
+  QuantityRange{U}(a.value:s.value:b.value)
+end
+# Both the general and the same-typed method are needed: Base's
+# `(:)(start::T, step, stop::T) where T` would otherwise be ambiguous with
+# the first, and it builds a StepRange that drifts on decimals.
+Base.:(:)(start::Unit, step::Unit, stop::Unit) = quantity_range(start, step, stop)
+Base.:(:)(start::T, step::Unit, stop::T) where T<:Unit = quantity_range(start, step, stop)
+Base.:(:)(start::Unit, stop::Unit) = (:)(promote(start, stop)...)
+Base.:(:)(start::T, stop::T) where T<:Unit = quantity_range(start, naked(T)(one(start.value)), stop)
+
 Base.convert(::Type{T}, n::D) where {D<:Dimension, T<:Dimension} = begin
   n isa T && return n
   val = n.value * conversion_factor(D, T)

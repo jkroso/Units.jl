@@ -306,6 +306,29 @@ abbr(::Type{Sheet{w,l}}) where {w,l} = "Sheet{$(w)×$(l)}"
   @test abbr(typeof(2J / 1N)) == "J/N"
 end
 
+@testset "ranges step the way plain numbers do" begin
+  # A whole-number end promotes, as 0.6:0.2:3's does.
+  r = 0.6m:0.2m:3m
+  @test length(r) == 13
+  @test first(r) == 0.6m && step(r) == 0.2m && last(r) == 3m
+  @test r[2] == 0.8m && 3m in r
+  @test collect(r) == collect(0.6:0.2:3) .* 1m
+  # Decimals don't drift short of the end.
+  @test collect(0.1m:0.1m:0.3m) == [0.1m, 0.2m, 0.3m]
+  @test last(0.6m:0.2m:3.0m) == 3m
+  # Mixed units meet in the finer one.
+  r = 600mm:200mm:3m
+  @test first(r) isa typeof(1mm) && last(r) == 3000mm && length(r) == 13
+  # Whole numbers stop at the last element the step reaches.
+  @test last(1mm:5mm:50mm) == 46mm && length(1mm:5mm:50mm) == 10
+  @test collect(0.5m:3m) == [0.5m, 1.5m, 2.5m]
+  @test collect(1m:3m) == [1m, 2m, 3m]
+  @test isempty(3m:1m:1m)
+  @test (0.6m:0.2m:3m)[2:3] == 0.8m:0.2m:1m
+  @test sum(1m:1m:3m) == 6m
+  @test string(0.6m:0.2m:3m) == "0.6m:0.2m:3m"
+end
+
 @use BenchmarkTools...
 @testset "benchmarks" begin
   @test isapprox(mean(@benchmark(1000*0.001)).time,
