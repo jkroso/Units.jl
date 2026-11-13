@@ -159,6 +159,41 @@ end
   @test convert(kb, 1kB) == 8kb
 end
 
+@use "." °C °F K J kg
+@testset "temperatures" begin
+  # A temperature is a place on its scale, so a conversion moves the zero as well as scaling the degrees
+  @test convert(°F, 25°C) == 77°F
+  @test convert(°F, 0°C) == 32°F
+  @test convert(°F, 100°C) == 212°F
+  @test convert(°F, -40°C) == -40°F
+  @test convert(°C, 77°F) == 25°C
+  @test convert(°C, 32°F) == 0°C
+  @test convert(K, 25°C) == 298.15K
+  @test convert(K, 77°F) == 298.15K
+  @test convert(°C, 0K) == -273.15°C
+  @test convert(°C, 298.15K) ≈ 25°C
+  @test convert(°F, 298.15K) ≈ 77°F
+  # The answer is in the scale that was asked for
+  @test convert(°F, 25°C) isa °F
+  @test convert(°C, 77°F) isa °C
+  @test convert(K, 25°C) isa K
+  @test convert(°F, 25°C).value === 77//1
+  @test convert(°F, 36.6°C).value ≈ 97.88
+  @test convert(typeof(1.0°F), 25°C).value === 77.0
+  @test convert(°C, 25°C) === 25°C
+  # Different scales compare as temperatures
+  @test 25°C == 77°F
+  @test 0°C == 273.15K
+  @test 25°C < 78°F
+  @test 20°C != 20°F
+  # Arithmetic in one scale stays in that scale
+  @test 25°C + 5°C == 30°C
+  @test 2 * 10°C == 20°C
+  # In a unit like J/kg/°C the degree is a step, not a place, so only its size counts
+  @test conversion_factor(°C, °F) == 9//5
+  @test convert(J/kg/°F, 9J/kg/°C) == 5J/kg/°F
+end
+
 @use "." ms ns s
 @testset "Sleep" begin
   @test 0.8 < @elapsed(sleep(1s)) < 1.2

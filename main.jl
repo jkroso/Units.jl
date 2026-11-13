@@ -690,13 +690,23 @@ Base.sleep(duration::Second) = sleep(convert(Real, duration))
 @defunit Kelvin <: Temperature K
 @defunit Celsius <: Temperature °C
 @defunit Fahrenheit <: Temperature °F
-basefactor(::Type{Fahrenheit{m}}) where m = 5//9 * m
-baseoffset(::Type{Kelvin{m}}) where m = 0//1
-baseoffset(::Type{Fahrenheit{m}}) where m = rationalize(459.67)
-baseoffset(::Type{Celsius{m}}) where m = rationalize(273.15)
-Base.promote_rule(::Type{<:Temperature}, ::Type{<:Temperature}) = Kelvin
-Base.convert(K::Type{<:Kelvin}, t::T) where T<:Union{Celsius,Fahrenheit} =
-  K((t.value + baseoffset(T)) * basefactor(T))
+# A degree Fahrenheit is 5/9 of a kelvin
+basefactor(::Type{<:Fahrenheit{m}}) where m = 5//9 * m
+# Where the zero of each scale is, in kelvin. 0°C is 273.15K and 0°F is 459.67 × 5/9 K.
+baseoffset(::Type{<:Kelvin}) = 0//1
+baseoffset(::Type{<:Celsius}) = 5463//20
+baseoffset(::Type{<:Fahrenheit}) = 45967//180
+# Two temperatures on different scales meet in kelvin: 25°C == 77°F
+Base.promote_rule(::Type{<:Temperature}, ::Type{<:Temperature}) = K
+# A temperature is a place on its scale, so the scales' zeros count as well as
+# the sizes of their degrees: 25°C is 77°F, not 45°F. A whole number comes out
+# as a Rational, as it does from the other units: convert(°F, 25°C) is (77//1)°F.
+Base.convert(::Type{T}, t::S) where {T<:Temperature, S<:Temperature} = begin
+  t isa T && return t
+  # Times the ratio of the degrees, plus the gap between the zeros in degrees of T: °C to °F is × 9/5 + 32
+  val = t.value * (basefactor(S) / basefactor(T)) + (baseoffset(S) - baseoffset(T)) / basefactor(T)
+  with_valtype(T, typeof(val))(val)
+end
 
 abstract type Data <: Dimension end
 @defunit Byte <: Data [k M G T]B
