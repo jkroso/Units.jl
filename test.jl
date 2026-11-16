@@ -398,6 +398,13 @@ end
                  mean(@benchmark 2^2).time,
                  rtol=0.2)
 
+  # Two different units work out that they measure the same thing as Julia
+  # compiles their comparison. Worked out each time, it took about 2 µs.
+  a, b = 2.0mm, 3.0m
+  @test minimum(@benchmark $a < $b).time < 100
+  lengths = Any[2.0mm, 3.0m]
+  @test minimum(@benchmark $lengths[1] == $lengths[2]).time < 200
+
   # ScaledMagnitude benchmarks
   sm = ScaledMagnitude(Int8(3), 2.5)  # Represents 2.5 × 10^3
   @test isapprox(mean(@benchmark inv($(sm))).time,

@@ -325,12 +325,20 @@ for λ in (:+, :-)
   @eval Base.$λ(a::Unit, b::Unit) = $λ(promote(a, b)...)
 end
 
+"""
+True when units `A` and `B` measure the same thing, like mm and inch. It's
+the same answer each time for the same two units, so Julia works it out as it
+compiles a comparison of them. Worked out each time, it took about 2 µs, and
+UI.jl compares a length in mm with one in px many times in each frame.
+"""
+Base.@assume_effects :foldable same_dimension(::Type{A}, ::Type{B}) where {A<:Unit, B<:Unit} = dimension(A) == dimension(B)
+
 for λ in (:<, :>, :(==), :isless)
   @eval Base.$λ(a::Real,b::Unit) = $λ(a, convert(Real, b))
   @eval Base.$λ(a::Unit,b::Real) = $λ(convert(Real, a), b)
   @eval Base.$λ(a::T,b::T) where T<:Unit = $λ(a.value, b.value)
   @eval Base.$λ(a::Unit,b::Unit) = begin
-    @assert dimension(typeof(a)) == dimension(typeof(b))
+    @assert same_dimension(typeof(a), typeof(b))
     $λ(promote(a, b)...)
   end
 end
