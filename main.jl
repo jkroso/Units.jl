@@ -389,6 +389,7 @@ Base.:(:)(start::T, stop::T) where T<:Unit = quantity_range(start, naked(T)(one(
 
 Base.convert(::Type{T}, n::D) where {D<:Dimension, T<:Dimension} = begin
   n isa T && return n
+  same_dimension(D, T) || error("$(abbr(T)) not dimensionally compatable with $(abbr(D))")
   val = n.value * conversion_factor(D, T)
   with_valtype(T, typeof(val))(val)
 end

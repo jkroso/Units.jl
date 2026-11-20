@@ -27,6 +27,9 @@
   @test 1km == 1km
   @test convert(km, 1) == 1km
   @test convert(km, 1000m) == 1km
+  # A unit that measures something else goes wrong, and doesn't give 1s for 1m
+  @test_throws ErrorException convert(s, 1m)
+  @test_throws ErrorException convert(kg, 1m)
   @test convert(day^-1, 1/yr) == (1//365)day^-1
   @test 2cm == Meter{Magnitude(-2)}(2)
   @test 3 * 1cm == 3cm
