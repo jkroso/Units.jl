@@ -59,8 +59,11 @@ Base.promote_rule(::Type{<:Money}, ::Type{<:Money}) = Money{:USD}
 
 Base.show(io::IO, wage::Wage) = begin
   A = get_units(Asset, wage)[1]
-  show(io, A(wage.value))
-  write(io, '/', abbr(inv(get_units(Time, wage)[1])))
+  T = get_units(Time, wage)[1]
+  # A unit with no dimension, like the % of 100AUD * 3.6%/yr, goes into the number: 3.60 AUD/yr, not 360.00 AUD/yr
+  value = convert(A/inv(T), wage).value
+  show(io, A(value))
+  write(io, '/', abbr(inv(T)))
   nothing
 end
 

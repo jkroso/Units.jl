@@ -121,6 +121,7 @@ end
 
 @use "./Money.jl" => MoneyModule
 @use "./Money.jl" Wage AUD USD
+@use "." week
 @testset "Money" begin
   @test AUD/hr <: Wage
   @test 1.5AUD/hr isa Wage
@@ -132,6 +133,9 @@ end
   @test 1.2AUD%1 ≈ 0.2AUD
   @test 1.2AUD÷1AUD == 1
   @test 1.2AUD÷1 == 1AUD
+  # A rate of money converts to another time and keeps its currency
+  @test convert(AUD/day, 7AUD/week) == 1AUD/day
+  @test convert(AUD/week, 2AUD/day) == 14AUD/week
 end
 
 @testset "Money conversion needs a rate source" begin
@@ -201,16 +205,29 @@ end
   @test 0.001 < @elapsed(sleep(5000ns)) < 0.05
 end
 
-@use "." Percent month yr ° rad
+@use "." Percent Permille month yr ° rad
 @testset "dimensionless units" begin
   @test convert(Percent/month, 15Percent/yr) == 1.25Percent/month
   @test round(Percent(10.547), digits=2) == Percent(10.55)
+  @test string(Percent(10)) == "10%"
+  @test string(Percent(0.5)) == "0.5%"
+  @test string(Permille(5)) == "5‰"
   @test Percent/yr == Combination{Tuple{Time^-1}, Tuple{Percent^1,yr^-1}}
   @test 10Percent/yr == 10Combination{Tuple{Time^-1}, Tuple{Percent^1,yr^-1}}
   @test 10Percent/yr * 5yr == 50Percent
   @test convert(m, 20m*(10Percent)) == 2m
   @test 100m + 100m*(10Percent) == 110m
   @test 100AUD - 10Percent == 90AUD
+  @test convert(AUD, 200AUD * 10Percent) == 20AUD
+  @test 200AUD - 200AUD * 10Percent == 180AUD
+  # A percentage on one side of a sum only
+  @test 100AUD * 10Percent/yr + 5AUD/yr == 15AUD/yr
+  @test 5AUD/yr + 100AUD * 10Percent/yr == 15AUD/yr
+  # A rate of money shows the percentage worked into its number
+  @test string(100AUD * 10Percent/yr) == "10.00 AUD/yr"
+  # A percentage under the line scales up
+  @test convert(m, 1m/(5Percent)) == 20m
+  @test 1m/(5Percent) + 1m == 21m
   @test 100 - 10Percent == 90
   @test 100AUD + 10Percent == 110AUD
   @test 100 + 10Percent == 110

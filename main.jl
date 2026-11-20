@@ -221,7 +221,15 @@ Base.promote_rule(A::Type{<:Exponent}, B::Type{<:Dimension}) = promote_rule(A, w
 Base.promote_rule(::Type{A}, ::Type{B}) where {A<:Combination,B<:Combination} = begin
   dims_a, dims_b = sorted_dims(A), sorted_dims(B)
   @assert dims_a == dims_b "dimension mismatch"
-  C = Combination{Tuple{dims_a...}, Tuple{map(promote_type, sorted_subunits(A), sorted_subunits(B))...}}
+  units_a, units_b = sorted_subunits(A), sorted_subunits(B)
+  # A unit with no dimension, like the % of AUD·%/yr, pairs with nothing in AUD/yr. So when one side
+  # has more of them, the sum leaves them all out, and AUD·%/yr + AUD/yr is in AUD/yr.
+  isnull(u) = abstract_dimension(u) == NullDimension
+  if count(isnull, units_a) != count(isnull, units_b)
+    filter!(!isnull, units_a)
+    filter!(!isnull, units_b)
+  end
+  C = Combination{Tuple{dims_a...}, Tuple{map(promote_type, units_a, units_b)...}}
   V = combine_valtype(valtype_of(A), valtype_of(B))
   isnothing(V) ? C : with_valtype(C, V)
 end
@@ -401,7 +409,9 @@ conversion_factor(A::Type{<:Exponent}, B::Type{<:Exponent}) = begin
   da, ea = unwrap(A), power(A)
   db, eb = unwrap(B), power(B)
   ea == eb || error("dimension mismatch")
-  (basefactor(da)/basefactor(db))^ea
+  # A unit converts to itself without its basefactor, which a currency gets from an exchange rate.
+  # The factor is 10⁰, not 1, so that the factors multiplied with it stay exact.
+  da === db ? Magnitude(0) : (basefactor(da)/basefactor(db))^ea
 end
 conversion_factor(A::Type{<:AbstractCombination{DA}}, B::Type{<:AbstractCombination{DB}}) where {DA,DB} = begin
   (units_a, scaler_a), (units_b, scaler_b) = simple_units(A), simple_units(B)
@@ -422,7 +432,8 @@ simple_units(C::Type{<:AbstractCombination}) = begin
   units, scale = flatten_units(C)
   dims = map(abstract_dimension, units)
   nulls = units[findall(==(NullDimension), dims)]
-  scale *= mapreduce(scaler, *, nulls, init=Magnitude(0))
+  # A unit with no dimension scales by its power: m/% is 100m for each 1, not 0.01m
+  scale *= mapreduce(u->scaler(u)^power(u), *, nulls, init=Magnitude(0))
   output = map(unique!(filter(!=(NullDimension), dims))) do d
     like_units = units[findall(==(d), dims)]
     T = promote_type(map(unwrap, like_units)...)
@@ -802,9 +813,10 @@ Base.promote_rule(A::Type{<:ScalingUnit}, B::Type{<:ScalingUnit}) = begin
   isnothing(V) ? ScalingUnit{m} : ScalingUnit{m, V}
 end
 const Percent = ScalingUnit/1e2
-abbr(::Type{Percent}) = "%"
+# `<:` so that a value, like Percent(10), which is a ScalingUnit{10⁻², Int64}, shows as 10%
+abbr(::Type{<:Percent}) = "%"
 const Permille = ScalingUnit/1e3
-abbr(::Type{Permille}) = "‰"
+abbr(::Type{<:Permille}) = "‰"
 @abbreviate ppm ScalingUnit/1e6
 @abbreviate ppb ScalingUnit/1e9
 
