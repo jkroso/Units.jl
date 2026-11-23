@@ -122,6 +122,33 @@ end
   @test 1kW*5m/kW == 5m
 end
 
+@use "." GW TW MWh GWh TWh GJ kWh
+@use "./Money.jl" USD
+@testset "a number over a derived unit has its inverse" begin
+  # As 22/kg is 22kg⁻¹. A number over an amount, like 1/5yr, is still a fifth of a year.
+  @test 22/W == 22W^-1 && 22/kg == 22kg^-1 && inv(1W) == 1W^-1
+  @test abbr(typeof(22/W)) == "W⁻¹"
+  @test 22W^-1 * 2kW ≈ 44000
+  @test 1/5yr ≈ 0.2yr
+end
+
+@testset "giga and tera" begin
+  @test convert(MW, 1GW) == 1000MW
+  @test convert(MWh, 1GW * 2hr) == 2000MWh
+  @test convert(GWh, 1TWh) == 1000GWh
+  @test convert(J, 1GJ) == 1_000_000_000J
+end
+
+@testset "a derived unit with a power in a combination" begin
+  # The scale of kW goes to the power -1 with it
+  @test convert(USD/MW, 1USD/kW) == 1000USD/MW
+  @test convert(kg/MW, 1kg/kW) == 1000kg/MW
+  @test convert(USD/MWh, 1USD/kWh) ≈ 1000USD/MWh
+  @test convert(USD/MWh, 1e9USD/TWh) ≈ 1000USD/MWh
+  @test convert(MWh^-1, 1TWh^-1) ≈ 1e-6MWh^-1
+  @test convert(kW^2, 1MW^2) == 1_000_000kW^2
+end
+
 @use "./Money.jl" => MoneyModule
 @use "./Money.jl" Wage AUD USD
 @use "." week

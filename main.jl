@@ -178,6 +178,8 @@ Base.inv(::Type{<:Exponent{d,n}}) where {d,n} = wrap(d, -n)
 Base.inv(E::Type{<:Exponent}) = wrap(get_param(E, 1), -get_param(E, 2))
 Base.inv(::Type{D}) where D<:Dimension = wrap(D, -1)
 Base.inv(C::Type{<:Combination}) = map_combo(inv, C)
+# 22/W is 22W⁻¹, as 22/kg is 22kg⁻¹
+Base.inv(::Type{D}) where D<:DerivedUnit = wrap(D, -1)
 Base.inv(u::Unit) = inv(u.value)inv(typeof(u))
 Base.:^(D::Type{<:Unit}, e) = wrap(D, e)
 Base.:^(::Type{<:Exponent{d, e1}}, e2) where {d,e1} = wrap(d, e1 * e2)
@@ -492,15 +494,17 @@ flatten_units(::Type{<:Combination{d,u}}) where {d,u} = accum_units(map(flatten_
 # A derived unit's scale is `scaler(D)`, so a subtype can work it out from its
 # own parameters rather than carry it as the first one.
 flatten_units(D::Type{<:DerivedUnit{m,u}}) where {m,u} = accum_units(map(flatten_units, parameters(u)), scaler(D))
+# The scale goes to the power too: kW⁻¹ is 10⁻³ of W⁻¹. With the scale as it was, 1USD/kW converted to 0.001USD/MW.
 flatten_units(::Type{<:Exponent{d,e}}) where {d,e} = begin
   units, scale = flatten_units(d)
-  map(u->wrap(unwrap(u),power(u)*e), units), scale
+  map(u->wrap(unwrap(u),power(u)*e), units), raised(scale, e)
 end
 flatten_units(E::Type{<:Exponent}) = begin
   d, e = unwrap(E), power(E)
   units, scale = flatten_units(d)
-  map(u->wrap(unwrap(u),power(u)*e), units), scale
+  map(u->wrap(unwrap(u),power(u)*e), units), raised(scale, e)
 end
+raised(scale, e) = e == 1 ? scale : isinteger(e) ? scale^Int(e) : scale
 flatten_units(D::Type{<:Dimension}) = Any[D], Magnitude(0)
 accum_units(results, scale) = begin
   reduce(results, init=(AnyType[],scale)) do out, (units, scale)
@@ -783,10 +787,13 @@ macro scaledunit(name, unit)
   end
 end
 
-@deriveunit Joule kg*m²/s^2 [k M]J
-@deriveunit Watt kg*m²/s^3 [m k M]W
+@deriveunit Joule kg*m²/s^2 [k M G]J
+@deriveunit Watt kg*m²/s^3 [m k M G T]W
 @abbreviate Wh W*hr
 @abbreviate kWh kW*hr
+@abbreviate MWh MW*hr
+@abbreviate GWh GW*hr
+@abbreviate TWh TW*hr
 @deriveunit Newton kg*m/s^2 [k]N
 @deriveunit Pascal N/m² [k M]Pa
 # @scaledunit kgf 1kg*gravity ruins precompilation

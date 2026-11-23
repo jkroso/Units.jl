@@ -78,6 +78,7 @@ Base.:*(m::ScaledMagnitude, n::Integer) = n * m
 Base.:/(a::ScaledMagnitude, b::ScaledMagnitude) = ScaledMagnitude(a.magnitude-b.magnitude, a.scaler/b.scaler)
 Base.:-(a::ScaledMagnitude) = ScaledMagnitude(a.magnitude, -a.scaler)
 Base.inv(m::ScaledMagnitude) = ScaledMagnitude(-m.magnitude, 1/m.scaler)
+Base.:^(m::ScaledMagnitude, n::Integer) = n < 0 ? inv(m)^(-n) : ScaledMagnitude(m.magnitude * n, m.scaler^n)
 
 Base.convert(::Type{LogNumber}, n::Real) = begin
   magnitude = log10(n)
