@@ -178,7 +178,7 @@ Base.inv(::Type{<:Exponent{d,n}}) where {d,n} = wrap(d, -n)
 Base.inv(E::Type{<:Exponent}) = wrap(get_param(E, 1), -get_param(E, 2))
 Base.inv(::Type{D}) where D<:Dimension = wrap(D, -1)
 Base.inv(C::Type{<:Combination}) = map_combo(inv, C)
-# 22/W is 22W⁻¹, as 22/kg is 22kg⁻¹
+# 22/W is 22 per watt, as 22/kg is 22 per kilogram
 Base.inv(::Type{D}) where D<:DerivedUnit = wrap(D, -1)
 Base.inv(u::Unit) = inv(u.value)inv(typeof(u))
 Base.:^(D::Type{<:Unit}, e) = wrap(D, e)
@@ -246,16 +246,14 @@ scaler(U::Type{<:Unit}) = 1
 prefix(T::Type{<:Dimension}) = abbr(scaler(T))
 
 abbr(T::Type{<:Dimension}) = prefix(T) * short_name(T)
-abbr(::Type{<:Exponent{d,n}}) where {d,n} = begin
-  n == 1 && return abbr(d)
-  n >= 0 && return string(abbr(d), exponents[Int(n)+1])
-  string(abbr(d), '⁻', exponents[Int(abs(n))+1])
-end
-abbr(E::Type{<:Exponent}) = begin
-  d, n = unwrap(E), power(E)
-  n == 1 && return abbr(d)
-  n >= 0 && return string(abbr(d), exponents[Int(n)+1])
-  string(abbr(d), '⁻', exponents[Int(abs(n))+1])
+# A unit with a negative power is a number over that unit: 1/yr, not 1yr⁻¹, and 1/s², not 1s⁻²
+abbr(::Type{<:Exponent{d,n}}) where {d,n} = power_abbr(abbr(d), n)
+abbr(E::Type{<:Exponent}) = power_abbr(abbr(unwrap(E)), power(E))
+power_abbr(name, n) = begin
+  n == 1 && return name
+  n >= 0 && return string(name, exponents[Int(n)+1])
+  n == -1 && return string('/', name)
+  string('/', name, exponents[Int(abs(n))+1])
 end
 abbr(T::Type{<:AbstractCombination}) = begin
   negative, positive = group(u->power(u) < 0, subunits(T))

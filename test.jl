@@ -125,9 +125,11 @@ end
 @use "." GW TW MWh GWh TWh GJ kWh
 @use "./Money.jl" USD
 @testset "a number over a derived unit has its inverse" begin
-  # As 22/kg is 22kg⁻¹. A number over an amount, like 1/5yr, is still a fifth of a year.
+  # As 22/kg is 22 per kilogram. A number over an amount, like 1/5yr, is still a fifth of a year.
   @test 22/W == 22W^-1 && 22/kg == 22kg^-1 && inv(1W) == 1W^-1
-  @test abbr(typeof(22/W)) == "W⁻¹"
+  @test abbr(typeof(22/W)) == "/W"
+  # A single unit with a negative power shows as a number over it
+  @test repr(0.01/yr) == "0.01/yr" && repr(3s^-2) == "3/s²" && repr(2kg^-1) == "2/kg"
   @test 22W^-1 * 2kW ≈ 44000
   @test 1/5yr ≈ 0.2yr
 end
