@@ -250,6 +250,14 @@ end
   @test 100AUD - 10Percent == 90AUD
   @test convert(AUD, 200AUD * 10Percent) == 20AUD
   @test 200AUD - 200AUD * 10Percent == 180AUD
+  # Two amounts with no dimension add and take away as plain amounts do
+  @test 100Percent - 15Percent == 85Percent && 50Percent + 5Percent == 55Percent
+  @test string(1Percent + 5Permille) == "15‰"
+  # and they're numbers to the functions of numbers
+  @test float(1Percent) == 0.01 && Float64(50Percent) == 0.5
+  @test exp(-1Percent) ≈ exp(-0.01) && log(1 + 50Percent) ≈ log(1.5)
+  # A number and a % give a decimal number, which a power doesn't overflow
+  @test 1 + 1Percent == 1.01 && (1 + 1Percent)^50 ≈ 1.01^50 && (1 - 1Percent)^100 ≈ 0.99^100
   # A percentage on one side of a sum only
   @test 100AUD * 10Percent/yr + 5AUD/yr == 15AUD/yr
   @test 5AUD/yr + 100AUD * 10Percent/yr == 15AUD/yr

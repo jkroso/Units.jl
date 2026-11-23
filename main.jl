@@ -828,10 +828,26 @@ abbr(::Type{<:Permille}) = "‰"
 @abbreviate ppm ScalingUnit/1e6
 @abbreviate ppb ScalingUnit/1e9
 
-Base.:-(a::Real, b::ScalingUnit) = a - a*scaler(b)
+# A plain number and an amount with no dimension give a decimal number: 1 + 1% is 1.01. As the exact
+# fraction 101//100 it overflowed when raised to a power, as in (1 + 1%)^50.
+Base.:-(a::Real, b::ScalingUnit) = a - a*float(scaler(b))
 Base.:-(a::Unit, b::ScalingUnit) = a - a*scaler(b)
-Base.:+(a::Real, b::ScalingUnit) = a + a*scaler(b)
+Base.:+(a::Real, b::ScalingUnit) = a + a*float(scaler(b))
 Base.:+(a::Unit, b::ScalingUnit) = a + a*scaler(b)
+# Two amounts with no dimension add and take away as plain amounts do: 100% - 15% is 85%. With only the
+# methods above, 100% - 15% took 15% of 100% away, which is itself a % to take away, so it never ended.
+for op in (:+, :-)
+  @eval Base.$op(a::ScalingUnit, b::ScalingUnit) = begin
+    T = promote_type(typeof(a), typeof(b))
+    T($op(convert(T, a).value, convert(T, b).value))
+  end
+end
+# An amount with no dimension is a number to the functions of numbers: exp(-1%) is exp(-0.01)
+Base.float(s::ScalingUnit) = convert(Float64, s)
+Base.Float64(s::ScalingUnit) = convert(Float64, s)
+for f in (:exp, :log, :sqrt)
+  @eval Base.$f(s::ScalingUnit) = $f(float(s))
+end
 
 abstract type Angle <: NullDimension end
 baseunit(::Type{Angle}) = Radian
